@@ -35,6 +35,202 @@ Start computing icosahedron...
 Start computing Q basis...
 Using constrained filter
 No seeding file provided. Starting full brain tractography
-Processing 14735 starting points with 8 threads
+Processing 14735 starting points with 1 threads
+before 
+ 175.065
+63.0447
+122.546
+44.1313
+175.065
+63.0447
+122.546
+44.1313
+175.065
+63.0447
+122.546
+44.1313
+   0.05
+after 
+ 170.653
+       1
+ 119.811
+     0.1
+  124.64
+ 40.3881
+ 97.1606
+ 33.0446
+ 152.617
+       1
+ 111.346
+ 15.0744
+0.111168
+before 
+ 706.154
+ 125.35
+494.308
+ 87.745
+706.154
+ 125.35
+494.308
+ 87.745
+706.154
+ 125.35
+494.308
+ 87.745
+   0.05
+after 
+ 99.2952
+       1
+ 151.372
+0.100476
+ 497.018
+       1
+ 339.186
+     0.1
+ 706.154
+  125.35
+ 494.308
+  87.745
+0.290747
+before 
+ 215.629
+61.3256
+ 150.94
+42.9279
+215.629
+61.3256
+ 150.94
+42.9279
+215.629
+61.3256
+ 150.94
+42.9279
+   0.05
+after 
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+before 
+ 86.4312
+19.7222
+60.5019
+13.8055
+86.4312
+19.7222
+60.5019
+13.8055
+86.4312
+19.7222
+60.5019
+13.8055
+   0.05
+after 
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+before 
+ 110.923
+34.9687
+77.6463
+24.4781
+110.923
+34.9687
+77.6463
+24.4781
+110.923
+34.9687
+77.6463
+24.4781
+   0.05
+after 
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+before 
+ 196.344
+79.8349
+137.441
+55.8844
+196.344
+79.8349
+137.441
+55.8844
+196.344
+79.8349
+137.441
+55.8844
+   0.05
+after 
+ 48.1746
+       1
+ 61.9713
+     0.1
+ 196.344
+ 79.8349
+ 137.441
+ 55.8844
+ 196.344
+ 79.8349
+ 137.441
+ 55.8844
+0.215569
+before 
+ 88.3224
+24.2822
+61.8257
+16.9975
+88.3224
+24.2822
+61.8257
+16.9975
+88.3224
+24.2822
+61.8257
+16.9975
+   0.05
+after 
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
+nan
 Output file name /home/rinat/Desktop/ukftests/seeds_tc_full_multi.vtk
-CPU Runtime was 4 sec.
+CPU Runtime was 3 sec.
