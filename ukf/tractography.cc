@@ -404,6 +404,7 @@ void Tractography::UpdateFilterModelType()
     // Get indicies of voxels in a range
     const ukfVectorType b_vals = _signal_data->GetBValues();
 
+    //std::cout << "Bvals \n" << b_vals << std::endl;
     int vx = 0;
     for (int i = 0; i < b_vals.size() / 2; ++i)
     {
@@ -762,9 +763,9 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
 
 void Tractography::ProcessStartingPointsBiExp(const int thread_id,
                                               std::vector<SeedPointInfo> &seed_infos,
-                                              vec3_t &starting_points,
-                                              ukfVectorType &signal_values,
-                                              ukfVectorType &starting_params)
+                                              const vec3_t &starting_points,
+                                              const ukfVectorType &signal_values,
+                                              const ukfVectorType &starting_params)
 {
   //const ukfVectorType &param = starting_params;
 
@@ -1049,8 +1050,7 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     ukfMatrixType p(info.covariance);
 
     // Estimate the initial state
-    // InitLoopUKF(state, p, signal_values[i], dNormMSE);
-
+    //InitLoopUKF(state, p, signal_values[i], dNormMSE);
     NonLinearLeastSquareOptimization(thread_id, state, signal_values, _model);
 
     // Output of the filter
@@ -1090,10 +1090,10 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
       // Add the primary seeds to the vector
       info.state = ConvertVector<stdVecState, State>(tmp_info_state);
       info_inv.state = ConvertVector<stdVecState, State>(tmp_info_inv_state);
-      mtx.Lock();
-      seed_infos.push_back(info);
-      seed_infos.push_back(info_inv);
-      mtx.Unlock();
+      //mtx.Lock();
+      //seed_infos.push_back(info);
+      //seed_infos.push_back(info_inv);
+      //mtx.Unlock();
       /*
       if (n_of_dirs > 1)
       {
@@ -1426,7 +1426,7 @@ bool Tractography::Run()
   return writeStatus;
 }
 
-void Tractography::computeRTOPfromSignal(ukfPrecisionType &rtopSignal, ukfVectorType &signal)
+void Tractography::computeRTOPfromSignal(ukfPrecisionType &rtopSignal, const ukfVectorType &signal)
 {
   assert(signal.size() > 0);
 
@@ -1676,7 +1676,7 @@ void itk::DiffusionPropagatorCostFunction::GetDerivative(const ParametersType &p
   }
 }
 
-void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &state, ukfVectorType &signal, FilterModel *model)
+void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &state, const ukfVectorType &signal, const FilterModel *model)
 {
   CostType::Pointer cost = CostType::New();
   OptimizerType::Pointer optimizer = OptimizerType::New();
@@ -1684,7 +1684,6 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   // Fill in array of parameters we are not intented to optimized
   // We still need to pass this parameters to optimizer because we need to compute
   // estimated signal during optimization and it requireds full state
-  mtx.Lock();
   ukfVectorType fixed;
   fixed.resize(12);
   fixed(0) = state(0);
@@ -1719,7 +1718,6 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   state_temp(11) = state(20);
 
   state_temp(12) = state(24);
-  mtx.Unlock();
 
   cost->SetNumberOfParameters(state_temp.size());
   cost->SetNumberOfFixed(fixed.size());
@@ -1730,14 +1728,11 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   cost->SetPhase(1);
 
   optimizer->SetCostFunction(cost);
-
   CostType::ParametersType p(cost->GetNumberOfParameters());
 
-  mtx.Lock();
   // Fill p
   for (int it = 0; it < state_temp.size(); ++it)
     p[it] = state_temp[it];
-  mtx.Unlock();
 
   optimizer->SetInitialPosition(p);
   optimizer->SetProjectedGradientTolerance(1e-12);
@@ -1746,7 +1741,7 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   optimizer->SetMaximumNumberOfCorrections(10);     // The number of corrections to approximate the inverse hessian matrix
   optimizer->SetCostFunctionConvergenceFactor(1e1); // Precision of the solution: 1e+12 for low accuracy; 1e+7 for moderate accuracy and 1e+1 for extremely high accuracy.
   optimizer->SetTrace(false);                       // Print debug info
-  mtx.Lock();
+
   // Set bounds
   OptimizerType::BoundSelectionType boundSelect(cost->GetNumberOfParameters());
   OptimizerType::BoundValueType upperBound(cost->GetNumberOfParameters());
@@ -1788,19 +1783,18 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   //upperBound[12] = upperBound[13] = upperBound[14] = 1.0;
   //upperBound[15] = 1.0;
   upperBound[12] = 1.0;
-  mtx.Unlock();
 
   optimizer->SetBoundSelection(boundSelect);
   optimizer->SetUpperBound(upperBound);
   optimizer->SetLowerBound(lowerBound);
   optimizer->StartOptimization();
+  
+  //p = optimizer->GetCurrentPosition();
 
-  p = optimizer->GetCurrentPosition();
-  mtx.Lock();
   // Write back the state
   for (int it = 0; it < state_temp.size(); ++it)
     state_temp[it] = p[it];
-
+  /*
   // Fill back the state tensor to return it the callee
   state(0) = fixed(0);
   state(1) = fixed(1);
@@ -1829,15 +1823,14 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   state(19) = state_temp(10);
   state(20) = state_temp(11);
   state(24) = state_temp(12);
-  mtx.Unlock();
+*/
 
   // Second phase of optimization (optional)
   // In this phase only w1, w2, w3 are optimizing
-
+/*
   CostType::Pointer cost2 = CostType::New();
   OptimizerType::Pointer optimizer2 = OptimizerType::New();
 
-  mtx.Lock();
   // Fill in array of parameters we are not intented to optimized
   // We still need to pass this parameters to optimizer because we need to compute
   // estimated signal during optimization and it requireds full state
@@ -1871,7 +1864,6 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   state_temp(0) = state(21);
   state_temp(1) = state(22);
   state_temp(2) = state(23);
-  mtx.Unlock();
 
   cost2->SetNumberOfParameters(state_temp.size());
   cost2->SetNumberOfFixed(fixed.size());
@@ -1886,10 +1878,8 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   CostType::ParametersType p2(cost2->GetNumberOfParameters());
 
   // Fill p
-  mtx.Lock();
   for (int it = 0; it < state_temp.size(); ++it)
     p2[it] = state_temp[it];
-  mtx.Unlock();
 
   optimizer2->SetInitialPosition(p2);
   optimizer2->SetProjectedGradientTolerance(1e-12);
@@ -1899,7 +1889,6 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   optimizer2->SetCostFunctionConvergenceFactor(1e1); // Precision of the solution: 1e+12 for low accuracy; 1e+7 for moderate accuracy and 1e+1 for extremely high accuracy.
   optimizer2->SetTrace(false);                       // Print debug info
 
-  mtx.Lock();
   // Set bounds
   OptimizerType::BoundSelectionType boundSelect2(cost2->GetNumberOfParameters());
   OptimizerType::BoundValueType upperBound2(cost2->GetNumberOfParameters());
@@ -1914,7 +1903,6 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
 
   // Upper bound
   upperBound2[0] = upperBound2[1] = upperBound2[2] = 1.0;
-  mtx.Unlock();
   optimizer2->SetBoundSelection(boundSelect2);
   optimizer2->SetUpperBound(upperBound2);
   optimizer2->SetLowerBound(lowerBound2);
@@ -1922,7 +1910,6 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
 
   p2 = optimizer2->GetCurrentPosition();
 
-  mtx.Lock();
   // Write back the state
   for (int it = 0; it < state_temp.size(); ++it)
     state_temp[it] = p2[it];
@@ -1954,7 +1941,7 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   state(21) = state_temp(0);
   state(22) = state_temp(1);
   state(23) = state_temp(2);
-  mtx.Unlock();
+  */
 
   // std::cout << "state after \n"
   //           << state << std::endl;

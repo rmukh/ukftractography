@@ -131,7 +131,7 @@ public:
   void SetNumberOfValues(unsigned int NumberOfValues) { _NumberOfValues = NumberOfValues; }
 
   // Set the signal values = reference signal we are trying to fit
-  void SetSignalValues(ukfVectorType &signal)
+  void SetSignalValues(const ukfVectorType &signal)
   {
     _signal.resize(signal.size());
     for (unsigned int it = 0; it < signal.size(); ++it)
@@ -141,7 +141,7 @@ public:
   }
 
   // Set the pointer to the model
-  void SetModel(FilterModel *model)
+  void SetModel(const FilterModel *model)
   {
     _model = model;
   }
@@ -196,7 +196,7 @@ private:
   unsigned int _NumberOfValues;
   unsigned int _phase;
   ukfVectorType _signal;
-  FilterModel *_model;
+  const FilterModel *_model;
   ukfVectorType _fixed_params;
 };
 } // end namespace itk
@@ -266,9 +266,9 @@ public:
 
   void ProcessStartingPointsBiExp(const int thread_id,
                                   std::vector<SeedPointInfo> &seed_infos,
-                                  vec3_t &starting_points,
-                                  ukfVectorType &signal_values,
-                                  ukfVectorType &starting_params);
+                                  const vec3_t &starting_points,
+                                  const ukfVectorType &signal_values,
+                                  const ukfVectorType &starting_params);
 
   /** \breif Performs the tractography
       \return true if files written successfully, else false
@@ -313,8 +313,8 @@ public:
 
   void SetDebug(bool v) { this->debug = v; }
 
-  typedef itk::LBFGSBOptimizer OptimizerType;
-  typedef itk::DiffusionPropagatorCostFunction CostType;
+  using OptimizerType = itk::LBFGSBOptimizer;
+  using CostType = itk::DiffusionPropagatorCostFunction;
 
 private:
   /**
@@ -382,13 +382,13 @@ private:
   void computeRTOPfromState(State &state, ukfPrecisionType &rtop, ukfPrecisionType &rtop1, ukfPrecisionType &rtop2, ukfPrecisionType &rtop3);
 
   /** Compute the Return to Origin probability in the case of the diffusionPropagator model, using the interpolated signal */
-  void computeRTOPfromSignal(ukfPrecisionType &rtopSignal, ukfVectorType &signal);
+  void computeRTOPfromSignal(ukfPrecisionType &rtopSignal, const ukfVectorType &signal);
 
   /** Print the State on the standard output in the case of the diffusion propagator model */
   void PrintState(State &state);
 
   /** Non Linear Least Square Optimization of input parameters */
-  void NonLinearLeastSquareOptimization(const int thread_id, State &state, ukfVectorType &signal, FilterModel *model);
+  void NonLinearLeastSquareOptimization(const int thread_id, State &state, const ukfVectorType &signal, const FilterModel *model);
 
   /** Make the seed point in the other direction */
   void InverseStateDiffusionPropagator(stdVecState &reference, stdVecState &inverted);
