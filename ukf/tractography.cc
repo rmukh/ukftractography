@@ -707,6 +707,9 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
   int fa_too_low = 0;
   std::cout << "Processing " << starting_points.size() << " starting points" << std::endl;
 
+#if defined(_OPENMP)
+#pragma omp parallel for
+#endif
   for (size_t i = 0; i < starting_points.size(); ++i)
   {
     const ukfVectorType &param = starting_params[i];
@@ -995,9 +998,8 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
 
       // Estimate the initial state
       // InitLoopUKF(state, p, signal_values[i], dNormMSE);
-      //std::cout << "Before nonlinear " << state.transpose() << std::endl;
       NonLinearLeastSquareOptimization(state, signal_values[i], _model);
-      //std::cout << "After nonlinear " << state.transpose() << std::endl;
+
       // Output of the filter
       tmp_info_state = ConvertVector<State, stdVecState>(state);
 
@@ -1035,35 +1037,35 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
         // Add the primary seeds to the vector
         info.state = ConvertVector<stdVecState, State>(tmp_info_state);
         info_inv.state = ConvertVector<stdVecState, State>(tmp_info_inv_state);
-        seed_infos.push_back(info);
-        seed_infos.push_back(info_inv);
+        //seed_infos.push_back(info);
+        //seed_infos.push_back(info_inv);
 
         if (n_of_dirs > 1)
         {
           SwapState3T_BiExp(tmp_info_state, p, 2);
           info.start_dir << tmp_info_state[0], tmp_info_state[1], tmp_info_state[2];
           info.state = ConvertVector<stdVecState, State>(tmp_info_state);
-          seed_infos.push_back(info);
+          //seed_infos.push_back(info);
 
           // Create the seed for the opposite direction, keep the other parameters as set for the first direction
           InverseStateDiffusionPropagator(tmp_info_state, tmp_info_inv_state);
 
           info_inv.state = ConvertVector<stdVecState, State>(tmp_info_inv_state);
           info_inv.start_dir << tmp_info_inv_state[0], tmp_info_inv_state[1], tmp_info_inv_state[2];
-          seed_infos.push_back(info_inv);
+          //seed_infos.push_back(info_inv);
           if (n_of_dirs > 2)
           {
             SwapState3T_BiExp(tmp_info_state, p, 3);
             info.start_dir << tmp_info_state[0], tmp_info_state[1], tmp_info_state[2];
             info.state = ConvertVector<stdVecState, State>(tmp_info_state);
-            seed_infos.push_back(info);
+            //seed_infos.push_back(info);
 
             // Create the seed for the opposite direction, keep the other parameters as set for the first direction
             InverseStateDiffusionPropagator(tmp_info_state, tmp_info_inv_state);
 
             info_inv.state = ConvertVector<stdVecState, State>(tmp_info_inv_state);
             info_inv.start_dir << tmp_info_inv_state[0], tmp_info_inv_state[1], tmp_info_inv_state[2];
-            seed_infos.push_back(info_inv);
+            //seed_infos.push_back(info_inv);
           }
         }
       }
@@ -1672,13 +1674,14 @@ void Tractography::NonLinearLeastSquareOptimization(State &state, ukfVectorType 
 
   optimizer->SetCostFunction(cost);
 
-  CostType::ParametersType p(cost->GetNumberOfParameters());
+  CostType::ParametersType* p = new CostType::ParametersType(cost->GetNumberOfParameters());
+  //CostType::ParametersType p(cost->GetNumberOfParameters());
 
   // Fill p
   for (int it = 0; it < state_temp.size(); ++it)
-    p[it] = state_temp[it];
+    (*p)[it] = state_temp[it];
 
-  optimizer->SetInitialPosition(p);
+  optimizer->SetInitialPosition(*p);
   optimizer->SetProjectedGradientTolerance(1e-12);
   optimizer->SetMaximumNumberOfIterations(500);
   optimizer->SetMaximumNumberOfEvaluations(500);
@@ -1728,15 +1731,15 @@ void Tractography::NonLinearLeastSquareOptimization(State &state, ukfVectorType 
   //upperBound[15] = 1.0;
   upperBound[12] = 1.0;
 
-  optimizer->SetBoundSelection(boundSelect);
-  optimizer->SetUpperBound(upperBound);
-  optimizer->SetLowerBound(lowerBound);
-  optimizer->StartOptimization();
+  //optimizer->SetBoundSelection(boundSelect);
+  //optimizer->SetUpperBound(upperBound);
+  //optimizer->SetLowerBound(lowerBound);
+  //optimizer->StartOptimization();
 
-  p = optimizer->GetCurrentPosition();
+  *p = optimizer->GetCurrentPosition();
   // Write back the state
   for (int it = 0; it < state_temp.size(); ++it)
-    state_temp[it] = p[it];
+    state_temp[it] = (*p)[it];
 
   // Fill back the state tensor to return it the callee
   state(0) = fixed(0);
@@ -1769,7 +1772,7 @@ void Tractography::NonLinearLeastSquareOptimization(State &state, ukfVectorType 
 
   // Second phase of optimization (optional)
   // In this phase only w1, w2, w3 are optimizing
-
+/*
   CostType::Pointer cost2 = CostType::New();
   OptimizerType::Pointer optimizer2 = OptimizerType::New();
 
@@ -1883,7 +1886,7 @@ void Tractography::NonLinearLeastSquareOptimization(State &state, ukfVectorType 
   state(21) = state_temp(0);
   state(22) = state_temp(1);
   state(23) = state_temp(2);
-
+*/
   // std::cout << "state after \n"
   //           << state << std::endl;
 }

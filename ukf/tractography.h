@@ -22,6 +22,10 @@
 #include "SPH_RIDG.h"
 #include "UtilMath.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 class NrrdData;
 class vtkPolyData;
 class Tractography;

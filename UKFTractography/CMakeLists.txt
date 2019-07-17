@@ -18,6 +18,7 @@ set(MODULE_TARGET_LIBRARIES
   ${VTK_LIBRARIES}
   ${Eigen_LIBRARIES}
   ${SphericalRidgelets_LIBRARY}
+  ${OpenMP_LIBRARY}
   UKFBase
   )
 
