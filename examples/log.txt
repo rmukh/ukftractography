@@ -3,15 +3,15 @@ Using the 3T Biexponential Spherical Ridgelets model with free water estimation.
 "*": set by user
 "-": default setting
 - stoppingFA: 0.15
-* seedingThreshold: 0.18
-- Qm: 0.0001
+* seedingThreshold: 0.5
+- Qm: 0.001
 - Ql: 150
 - Qt: 50
-* minRTOP: 20
+* minRTOP: 35
 - maxNMSE: 0.15
 - maxUKFIterations: 5
 - Rs: 0.015
-- stepLength: 0.5
+* stepLength: 0.3
 * recordLength: 0.9
 - Qw: 0.002
 - Qwiso: 0.002
@@ -34,6 +34,7 @@ Start computing R basis...
 Start computing icosahedron...
 Start computing Q basis...
 Using constrained filter
-Using Spherical Ridgelets
-Processing 363 starting points
-Final seeds vector size 682
+No seeding file provided. Starting full brain tractography
+Processing 14735 starting points with 8 threads
+Output file name /home/rinat/Desktop/ukftests/seeds_tc_full_multi.vtk
+CPU Runtime was 4 sec.
