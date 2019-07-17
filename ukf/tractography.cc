@@ -1546,7 +1546,7 @@ void Tractography::PrintState(State &state)
   std::cout << " --- " << std::endl;
 }
 
-void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &state, const ukfVectorType &signal, const FilterModel *model)
+void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &state, const ukfVectorType &signal, FilterModel *model)
 {
   // Fill in array of parameters we are not intented to optimized
   // We still need to pass this parameters to optimizer because we need to compute
@@ -1620,7 +1620,7 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   upperBound[12] = 1.0;
 
   // init solver with bounds
-  LBFGSB MySolver(lowerBound, upperBound, _model);
+  LBFGSB MySolver(lowerBound, upperBound, model);
   MySolver._signal = signal;
   MySolver._fixed_params = fixed_params;
   // solve the problem

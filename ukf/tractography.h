@@ -282,7 +282,7 @@ private:
   void PrintState(State &state);
 
   /** Non Linear Least Square Optimization of input parameters */
-  void NonLinearLeastSquareOptimization(const int thread_id, State &state, const ukfVectorType &signal, const FilterModel *model);
+  void NonLinearLeastSquareOptimization(const int thread_id, State &state, const ukfVectorType &signal, FilterModel *model);
 
   /** Make the seed point in the other direction */
   void InverseStateDiffusionPropagator(stdVecState &reference, stdVecState &inverted);
