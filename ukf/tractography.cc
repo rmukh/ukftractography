@@ -705,9 +705,9 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
   }
 
   std::vector<SeedPointInfo> seed_infos2;
-  const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
-  assert(num_of_threads > 0);
-
+  //const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
+  //assert(num_of_threads > 0);
+const int num_of_threads = 1;
   // Pack information for each seed point.
   std::cout << "Processing " << starting_points.size() << " starting points with " << num_of_threads << " threads" << std::endl;
   {
@@ -1618,13 +1618,14 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   //upperBound[12] = upperBound[13] = upperBound[14] = 1.0;
   //upperBound[15] = 1.0;
   upperBound[12] = 1.0;
-
+  cout << "before \n " << state_temp << endl;
   // init solver with bounds
   LBFGSB MySolver(lowerBound, upperBound, model);
   MySolver._signal = signal;
   MySolver._fixed_params = fixed_params;
   // solve the problem
   MySolver.Solve(state_temp);
+  cout << "after \n" << MySolver.XOpt << endl;
 
   //MySolver.XOpt;
 

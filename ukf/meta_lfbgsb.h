@@ -43,11 +43,11 @@ struct Options
     int m;
     Options()
     {
-        tol = 1e-10;
-        functol = 1e-12;
+        tol = 1e-9;
+        functol = 1e-10;
         constrtol = 1e-2;
         maxIter = 500;
-        m = 10;
+        m = 6;
     }
 };
 
