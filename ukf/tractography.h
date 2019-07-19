@@ -13,9 +13,7 @@
 #include "ukf_types.h"
 #include "ukf_exports.h"
 
-// ITK includes
-#include "itkSingleValuedCostFunction.h"
-#include "itkLBFGSBOptimizer.h"
+#include "lbfgsb_optimizer.h"
 
 // Spherical ridgelets
 #include "SOLVERS.h"
@@ -98,108 +96,6 @@ struct UKFSettings
   std::string seedsFile;
   std::string maskFile;
 };
-
-namespace itk
-{
-class DiffusionPropagatorCostFunction : public SingleValuedCostFunction
-{
-public:
-  /** Standard class typedefs. */
-  typedef DiffusionPropagatorCostFunction Self;
-  typedef SingleValuedCostFunction Superclass;
-  typedef SmartPointer<Self> Pointer;
-  typedef SmartPointer<const Self> ConstPointer;
-
-  /** Method for creation through the object factory. */
-  itkNewMacro(Self);
-
-  /** Run-time type information (and related methods). */
-  itkTypeMacro(DiffusionPropagatorCostFunction, SingleValuedCostFunction);
-
-  // We are estimating the parameters of the state for the
-  // diffusion propagator model. Number of rows in the state
-  // vector
-  unsigned int GetNumberOfParameters() const { return _NumberOfParameters; }
-  void SetNumberOfParameters(unsigned int NumberOfParameters) { _NumberOfParameters = NumberOfParameters; }
-
-  // Number of fixed (not for optimization) parameters
-  unsigned int GetNumberOfFixed() const { return _NumberOfFixed; }
-  void SetNumberOfFixed(unsigned int NumberOfFixed) { _NumberOfFixed = NumberOfFixed; }
-
-  // The number of gradient directions in which the signal is estimated
-  unsigned int GetNumberOfValues() const { return _NumberOfValues; }
-  void SetNumberOfValues(unsigned int NumberOfValues) { _NumberOfValues = NumberOfValues; }
-
-  // Set the signal values = reference signal we are trying to fit
-  void SetSignalValues(ukfVectorType &signal)
-  {
-    _signal.resize(signal.size());
-    for (unsigned int it = 0; it < signal.size(); ++it)
-    {
-      _signal(it) = signal[it];
-    }
-  }
-
-  // Set the pointer to the model
-  void SetModel(FilterModel *model)
-  {
-    _model = model;
-  }
-
-  // Set fixed parameters
-  void SetFixed(ukfVectorType &fixed)
-  {
-    _fixed_params.resize(fixed.size());
-    for (unsigned int it = 0; it < fixed.size(); ++it)
-    {
-      _fixed_params(it) = fixed[it];
-    }
-  }
-
-  void SetPhase(unsigned int phase)
-  {
-    _phase = phase;
-  }
-
-  /** Compute the relative error between the signal estimate and the signal data */
-  void computeError(ukfMatrixType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err) const
-  {
-    assert(signal_estimate.rows() == signal.size());
-
-    ukfPrecisionType sum = 0.0;
-    ukfPrecisionType norm_sq_signal = 0.0;
-    unsigned int N = signal.size() / 2;
-
-    for (unsigned int i = 0; i < N; ++i)
-    {
-      ukfPrecisionType diff = signal[i] - signal_estimate(i, 0);
-      sum += diff * diff;
-      norm_sq_signal += signal[i] * signal[i];
-    }
-
-    err = sum / (norm_sq_signal);
-  }
-
-  MeasureType GetValue(const ParametersType &parameters) const;
-  void GetDerivative(const ParametersType &parameters, DerivativeType &derivative) const;
-
-protected:
-  DiffusionPropagatorCostFunction() {}
-  ~DiffusionPropagatorCostFunction() {}
-
-private:
-  DiffusionPropagatorCostFunction(const Self &); //purposely not implemented
-  void operator=(const Self &);                  //purposely not implemented
-
-  unsigned int _NumberOfParameters;
-  unsigned int _NumberOfFixed;
-  unsigned int _NumberOfValues;
-  unsigned int _phase;
-  ukfVectorType _signal;
-  FilterModel *_model;
-  ukfVectorType _fixed_params;
-};
-} // end namespace itk
 
 /**
  * \class Tractography
@@ -313,9 +209,6 @@ public:
 
   void SetDebug(bool v) { this->debug = v; }
 
-  typedef itk::LBFGSBOptimizer OptimizerType;
-  typedef itk::DiffusionPropagatorCostFunction CostType;
-
 private:
   /**
    * Calculate six tensor coefficients by solving B * d = log(s), where d are
@@ -386,9 +279,6 @@ private:
 
   /** Print the State on the standard output in the case of the diffusion propagator model */
   void PrintState(State &state);
-
-  /** Non Linear Least Square Optimization of input parameters */
-  void NonLinearLeastSquareOptimization(const int thread_id, State &state, ukfVectorType &signal, FilterModel *model);
 
   /** Make the seed point in the other direction */
   void InverseStateDiffusionPropagator(stdVecState &reference, stdVecState &inverted);
@@ -518,7 +408,7 @@ private:
   // Sphereical Ridgelets helper matricies/vectors
   ukfMatrixType fcs;
   ukfMatrixType nu;
-  vector<vector<unsigned int>> conn;
+  std::vector<std::vector<unsigned int>> conn;
 
   // Spherical Ridgelets helper variables
   ukfPrecisionType sph_rho;
@@ -528,6 +418,7 @@ private:
   ukfPrecisionType max_odf_thresh;
 
   itk::SimpleMutexLock mtx;
+  std::vector<LBFGSBSolver *> _lbfgsb;
 };
 
 #endif // TRACTOGRAPHY_H_

@@ -14,6 +14,7 @@
 #include "linalg.h"
 #include "ISignalData.h"
 #include "unscented_kalman_filter.h"
+#include "lbfgsb_optimizer.h"
 
 /**
  * \struct FilterModel

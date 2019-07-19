@@ -43,6 +43,7 @@ set(MODULE_SRCS
   cli.cc
   tractography.cc
   unscented_kalman_filter.cc
+  lbfgsb_optimizer.cc
   seed.cc
   ukffiber.cc
   NrrdData.cc

@@ -36,5 +36,157 @@ Start computing Q basis...
 Using constrained filter
 No seeding file provided. Starting full brain tractography
 Processing 14735 starting points with 8 threads
+At X0         0 variables are exactly at the bounds
+At X0         0 variables are exactly at the bounds
+At X0         0 variables are exactly at the bounds
+At X0         0 variables are exactly at the bounds
+At X0         0 variables are exactly at the bounds
+At X0         0 variables are exactly at the bounds
+At iterate     0    f=     0.065962    |proj g|=      0.10229
+At iterate     0    f=     0.078272    |proj g|=         0.05
+At iterate     0    f=      0.26285    |proj g|=         0.05
+At iterate     0    f=     0.033453    |proj g|=     0.060012
+At iterate     0    f=     0.052024    |proj g|=         0.05
+At iterate     0    f=     0.044447    |proj g|=         0.05
+At X0         0 variables are exactly at the bounds
+At iterate     1    f=     0.063333    |proj g|=   0.00010155
+At X0         0 variables are exactly at the bounds
+At iterate     0    f=     0.060068    |proj g|=    0.0058371
+At iterate     0    f=       0.1936    |proj g|=     0.028415
+At iterate     1    f=     0.060065    |proj g|=    0.0048398
+At iterate     1    f=     0.032551    |proj g|=   7.2205e-05
+At iterate     1    f=      0.19343    |proj g|=     0.016563
+At iterate     2    f=     0.060059    |proj g|=   3.7608e-05
+At iterate     2    f=      0.19334    |proj g|=   7.2704e-05
+At iterate     3    f=     0.060056    |proj g|=   0.00072433
+At iterate     4    f=     0.060034    |proj g|=    0.0054747
+At iterate     2    f=     0.060993    |proj g|=     0.015172
+At iterate     5    f=     0.059985    |proj g|=     0.011761
+At iterate     3    f=      0.19331    |proj g|=    0.0032619
+At iterate     2    f=     0.059948    |proj g|=    0.0014128
+At iterate     4    f=      0.19305    |proj g|=     0.017574
+At iterate     3    f=     0.058084    |proj g|=      0.10861
+At iterate     3    f=     0.059947    |proj g|=   3.7512e-05
+At iterate     5    f=      0.19244    |proj g|=     0.038882
+At iterate     4    f=     0.055267    |proj g|=       0.1653
+At iterate     6    f=      0.19089    |proj g|=     0.073078
+At iterate     5    f=      0.05129    |proj g|=      0.07681
+At iterate     7    f=      0.18743    |proj g|=      0.12197
+At iterate     6    f=     0.050197    |proj g|=   0.00015746
+At iterate     8    f=      0.17993    |proj g|=      0.13317
+At iterate     4    f=     0.059947    |proj g|=   0.00017099
+At iterate     5    f=     0.059946    |proj g|=    0.0014323
+At iterate     9    f=      0.17375    |proj g|=     0.023745
+At iterate     7    f=     0.050196    |proj g|=   0.00038103
+At iterate     6    f=     0.059942    |proj g|=    0.0030579
+At iterate    10    f=      0.17312    |proj g|=     0.035826
+ Positive dir derivative in projection  Using the backtracking step            * * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           * * *
+   N   Tit  Tnf  Tnint  Skip  Nact     Projg        F
+   13    1   21      2    0     1        0.05       0.052
+F = 0.0520237
+                              ABNORMAL_TERMINATION_IN_LNSRCH
+ Line search cannot locate an adequate point after 20 function
+  and gradient evaluations.  Previous x, f and g restored.
+ Possible causes: 1 error in function or gradient evaluation;
+                  2 rounding error dominate computation.
+ Cauchy                time          0 seconds.
+ Subspace minimization time          0 seconds.
+ Line search           time          0 seconds.
+ Total User time          0 seconds.
+At iterate     8    f=     0.050183    |proj g|=    0.0048475
+           * * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           * * *
+   N   Tit  Tnf  Tnint  Skip  Nact     Projg        F
+   13    1   21      2    0     1        0.05      0.0444
+F = 0.0444471
+                              ABNORMAL_TERMINATION_IN_LNSRCH
+ Line search cannot locate an adequate point after 20 function
+  and gradient evaluations.  Previous x, f and g restored.
+ Possible causes: 1 error in function or gradient evaluation;
+                  2 rounding error dominate computation.
+ Cauchy                time          0 seconds.
+ Subspace minimization time          0 seconds.
+ Line search           time          0 seconds.
+ Total User time          0 seconds.
+At iterate     1    f=     0.059941    |proj g|=     0.002234
+At iterate    11    f=      0.17274    |proj g|=     0.030671
+           * * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           * * *
+   N   Tit  Tnf  Tnint  Skip  Nact     Projg        F
+   13    1   21      2    0     1        0.05       0.263
+F = 0.262846
+                              ABNORMAL_TERMINATION_IN_LNSRCH
+ Line search cannot locate an adequate point after 20 function
+  and gradient evaluations.  Previous x, f and g restored.
+ Possible causes: 1 error in function or gradient evaluation;
+                  2 rounding error dominate computation.
+ Cauchy                time          0 seconds.
+ Subspace minimization time          0 seconds.
+ Line search           time          0 seconds.
+ Total User time          0 seconds.
+At iterate     9    f=     0.050157    |proj g|=      0.01033
+At iterate    12    f=      0.17237    |proj g|=    0.0064181
+At X0         0 variables are exactly at the bounds
+At iterate     2    f=      0.05994    |proj g|=   3.7507e-05
+At iterate    10    f=     0.050084    |proj g|=     0.019767
+At X0         0 variables are exactly at the bounds
+At iterate     2    f=     0.080307    |proj g|=         0.05
+At X0         0 variables are exactly at the bounds
+At iterate    11    f=     0.049915    |proj g|=     0.032598
+At iterate     0    f=     0.086612    |proj g|=         0.05
+At iterate     1    f=      0.17236    |proj g|=   2.9255e-05
+At iterate     0    f=     0.054056    |proj g|=         0.05
+At iterate    12    f=     0.049563    |proj g|=     0.046835
+           * * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           * * *
+   N   Tit  Tnf  Tnint  Skip  Nact     Projg        F
+   13    1   21      2    0     1        0.05      0.0783
+F = 0.0782722
+                              ABNORMAL_TERMINATION_IN_LNSRCH
+ Line search cannot locate an adequate point after 20 function
+  and gradient evaluations.  Previous x, f and g restored.
+ Possible causes: 1 error in function or gradient evaluation;
+                  2 rounding error dominate computation.
+ Cauchy                time          0 seconds.
+ Subspace minimization time          0 seconds.
+ Line search           time          0 seconds.
+ Total User time          0 seconds.
 Output file name /home/rinat/Desktop/ukftests/seeds_tc_full_multi.vtk
 CPU Runtime was 4 sec.

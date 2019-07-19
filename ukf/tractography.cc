@@ -121,7 +121,9 @@ Tractography::Tractography(UKFSettings s) :
                                             sph_J(2),
                                             fista_lambda(0.01),
                                             lvl(4),
-                                            max_odf_thresh(0.7)
+                                            max_odf_thresh(0.7),
+                                            mtx{},
+                                            _lbfgsb(0, NULL)
 // end initializer list
 {
 }
@@ -703,60 +705,66 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
     }
   }
 
-  std::vector<SeedPointInfo> seed_infos2;
+  seed_infos.reserve(starting_points.size() * 6);
+
   const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
-  assert(num_of_threads > 0);
+  //assert(num_of_threads > 0);
+//int num_of_threads = 2;
+    _lbfgsb.reserve(num_of_threads); //Allocate, but do not assign
+  for (int i = 0; i < num_of_threads; i++)
+  {
+    _lbfgsb.push_back(new LBFGSBSolver(_model)); // Create one LFBGS nonlinear optimizer for each thread
+  }
 
   // Pack information for each seed point.
   std::cout << "Processing " << starting_points.size() << " starting points with " << num_of_threads << " threads" << std::endl;
+
+  WorkDistribution work_distribution = GenerateWorkDistribution(num_of_threads, static_cast<int>(starting_points.size()));
+
+#if ITK_VERSION_MAJOR >= 5
+  itk::PlatformMultiThreader::Pointer threader = itk::PlatformMultiThreader::New();
+  threader->SetNumberOfWorkUnits(num_of_threads);
+  std::vector<std::thread> vectorOfThreads;
+  vectorOfThreads.reserve(num_of_threads);
+#else
+  itk::MultiThreader::Pointer threader = itk::MultiThreader::New();
+  threader->SetNumberOfThreads(num_of_threads);
+#endif
+  seed_init_thread_struct str;
+  str.tractography_ = this;
+  str.work_distribution = &work_distribution;
+
+  str.seed_infos_ = &seed_infos;
+  str.starting_points_ = &starting_points;
+  str.signal_values_ = &signal_values;
+  str.starting_params_ = &starting_params;
+
+  for (int i = 0; i < num_of_threads; i++)
   {
-    WorkDistribution work_distribution = GenerateWorkDistribution(num_of_threads, static_cast<int>(starting_points.size()));
-
 #if ITK_VERSION_MAJOR >= 5
-    itk::PlatformMultiThreader::Pointer threader = itk::PlatformMultiThreader::New();
-    threader->SetNumberOfWorkUnits(num_of_threads);
-    std::vector<std::thread> vectorOfThreads;
-    vectorOfThreads.reserve(num_of_threads);
+    vectorOfThreads.push_back(std::thread(SeedInitThreadCallback, i, &str));
 #else
-    itk::MultiThreader::Pointer threader = itk::MultiThreader::New();
-    threader->SetNumberOfThreads(num_of_threads);
-#endif
-    seed_init_thread_struct str;
-    str.tractography_ = this;
-    str.work_distribution = &work_distribution;
-
-    str.seed_infos_ = &seed_infos2;
-    str.starting_points_ = &starting_points;
-    str.signal_values_ = &signal_values;
-    str.starting_params_ = &starting_params;
-
-    for (int i = 0; i < num_of_threads; i++)
-    {
-#if ITK_VERSION_MAJOR >= 5
-      vectorOfThreads.push_back(std::thread(SeedInitThreadCallback, i, &str));
-#else
-      threader->SetMultipleMethod(i, SeedInitThreadCallback, &str);
-#endif
-    }
-#if ITK_VERSION_MAJOR < 5
-    threader->SetGlobalDefaultNumberOfThreads(num_of_threads);
-#else
-    itk::MultiThreaderBase::SetGlobalDefaultNumberOfThreads(num_of_threads);
-#endif
-
-#if ITK_VERSION_MAJOR >= 5
-    for (auto &li : vectorOfThreads)
-    {
-      if (li.joinable())
-      {
-        li.join();
-      }
-    }
-#else
-    threader->MultipleMethodExecute();
+    threader->SetMultipleMethod(i, SeedInitThreadCallback, &str);
 #endif
   }
-  seed_infos = seed_infos2;
+#if ITK_VERSION_MAJOR < 5
+  threader->SetGlobalDefaultNumberOfThreads(num_of_threads);
+#else
+  itk::MultiThreaderBase::SetGlobalDefaultNumberOfThreads(num_of_threads);
+#endif
+
+#if ITK_VERSION_MAJOR >= 5
+  for (auto &li : vectorOfThreads)
+  {
+    if (li.joinable())
+    {
+      li.join();
+    }
+  }
+#else
+  threader->MultipleMethodExecute();
+#endif
+
   cout << "Final seeds vector size " << seed_infos.size() << std::endl;
 }
 
@@ -766,6 +774,8 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
                                               ukfVectorType &signal_values,
                                               ukfVectorType &starting_params)
 {
+  int signal_dim = _signal_data->GetSignalDimension();
+
   //const ukfVectorType &param = starting_params;
 
   // Filter out seeds whose FA is too low.
@@ -839,7 +849,6 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     tmp_info_inv_state[2] = info_inv.start_dir[2];
   }
 
-  int signal_dim = _signal_data->GetSignalDimension();
   ukfVectorType signal(signal_dim * 2);
 
   ukfPrecisionType Viso;
@@ -1049,9 +1058,17 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     ukfMatrixType p(info.covariance);
 
     // Estimate the initial state
-    // InitLoopUKF(state, p, signal_values[i], dNormMSE);
-
-    NonLinearLeastSquareOptimization(thread_id, state, signal_values, _model);
+    //mtx.Lock();
+    //std::cout << "state before " << state.transpose() << std::endl;
+    //std::cout << "signal_values before " << signal_values.transpose() << std::endl;
+//mtx.Unlock();
+//mtx.Lock();
+    _lbfgsb[thread_id]->Optimize(state, signal_values);
+ //   mtx.Unlock();
+//mtx.Lock();
+    //std::cout << "state after " << state.transpose() << std::endl;
+    //std::cout << "signal_values after " << signal_values.transpose() << std::endl;
+    //mtx.Unlock();
 
     // Output of the filter
     tmp_info_state = ConvertVector<State, stdVecState>(state);
@@ -1090,41 +1107,47 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
       // Add the primary seeds to the vector
       info.state = ConvertVector<stdVecState, State>(tmp_info_state);
       info_inv.state = ConvertVector<stdVecState, State>(tmp_info_inv_state);
+
       mtx.Lock();
       seed_infos.push_back(info);
       seed_infos.push_back(info_inv);
       mtx.Unlock();
-      /*
+
       if (n_of_dirs > 1)
       {
         SwapState3T_BiExp(tmp_info_state, p, 2);
         info.start_dir << tmp_info_state[0], tmp_info_state[1], tmp_info_state[2];
         info.state = ConvertVector<stdVecState, State>(tmp_info_state);
-        seed_infos.push_back(info);
 
         // Create the seed for the opposite direction, keep the other parameters as set for the first direction
         InverseStateDiffusionPropagator(tmp_info_state, tmp_info_inv_state);
 
         info_inv.state = ConvertVector<stdVecState, State>(tmp_info_inv_state);
         info_inv.start_dir << tmp_info_inv_state[0], tmp_info_inv_state[1], tmp_info_inv_state[2];
+
+        mtx.Lock();
+        seed_infos.push_back(info);
         seed_infos.push_back(info_inv);
+        mtx.Unlock();
 
         if (n_of_dirs > 2)
         {
           SwapState3T_BiExp(tmp_info_state, p, 3);
           info.start_dir << tmp_info_state[0], tmp_info_state[1], tmp_info_state[2];
           info.state = ConvertVector<stdVecState, State>(tmp_info_state);
-          seed_infos.push_back(info);
 
           // Create the seed for the opposite direction, keep the other parameters as set for the first direction
           InverseStateDiffusionPropagator(tmp_info_state, tmp_info_inv_state);
 
           info_inv.state = ConvertVector<stdVecState, State>(tmp_info_inv_state);
           info_inv.start_dir << tmp_info_inv_state[0], tmp_info_inv_state[1], tmp_info_inv_state[2];
+
+          mtx.Lock();
+          seed_infos.push_back(info);
           seed_infos.push_back(info_inv);
+          mtx.Unlock();
         }
       }
-      */
     }
   }
   else
@@ -1135,7 +1158,6 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     tmp_info_inv_state[4] = starting_params[7]; // l2
   }
 
-  /*
   // Duplicate/tripple states if we have several tensors.
   if (_num_tensors > 1 && !_noddi && !_diffusion_propagator)
   {
@@ -1189,7 +1211,7 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     seed_infos.push_back(info_inv); // NOTE that the seed in reverse direction is put directly after the seed in
                                     // original direction
   }
-*/
+
   //if (seed_infos.size() > 1)
   //break;
 }
@@ -1544,420 +1566,6 @@ void Tractography::PrintState(State &state)
   std::cout << "\t w1, w2, w3: " << state[21] << " " << state[22] << "" << state[23] << std::endl;
   std::cout << "\t wiso: " << state[24] << std::endl;
   std::cout << " --- " << std::endl;
-}
-
-itk::SingleValuedCostFunction::MeasureType itk::DiffusionPropagatorCostFunction::GetValue(const ParametersType &parameters) const
-{
-  MeasureType residual = 0.0;
-
-  //assert(this->GetNumberOfParameters() == 16);
-
-  // Convert the parameter to the ukfMtarixType
-  ukfMatrixType localState(this->GetNumberOfParameters() + this->GetNumberOfFixed(), 1);
-  if (this->_phase == 1)
-  {
-    localState(0, 0) = _fixed_params(0);
-    localState(1, 0) = _fixed_params(1);
-    localState(2, 0) = _fixed_params(2);
-    localState(7, 0) = _fixed_params(3);
-    localState(8, 0) = _fixed_params(4);
-    localState(9, 0) = _fixed_params(5);
-    localState(14, 0) = _fixed_params(6);
-    localState(15, 0) = _fixed_params(7);
-    localState(16, 0) = _fixed_params(8);
-    localState(21, 0) = _fixed_params(9);
-    localState(22, 0) = _fixed_params(10);
-    localState(23, 0) = _fixed_params(11);
-
-    localState(3, 0) = parameters[0];
-    localState(4, 0) = parameters[1];
-    localState(5, 0) = parameters[2];
-    localState(6, 0) = parameters[3];
-    localState(10, 0) = parameters[4];
-    localState(11, 0) = parameters[5];
-    localState(12, 0) = parameters[6];
-    localState(13, 0) = parameters[7];
-    localState(17, 0) = parameters[8];
-    localState(18, 0) = parameters[9];
-    localState(19, 0) = parameters[10];
-    localState(20, 0) = parameters[11];
-    localState(24, 0) = parameters[12];
-  }
-  else if (this->_phase == 2)
-  {
-    localState(0, 0) = _fixed_params(0);
-    localState(1, 0) = _fixed_params(1);
-    localState(2, 0) = _fixed_params(2);
-    localState(3, 0) = _fixed_params(3);
-    localState(4, 0) = _fixed_params(4);
-    localState(5, 0) = _fixed_params(5);
-    localState(6, 0) = _fixed_params(6);
-    localState(7, 0) = _fixed_params(7);
-    localState(8, 0) = _fixed_params(8);
-    localState(9, 0) = _fixed_params(9);
-    localState(10, 0) = _fixed_params(10);
-    localState(11, 0) = _fixed_params(11);
-    localState(12, 0) = _fixed_params(12);
-    localState(13, 0) = _fixed_params(13);
-    localState(14, 0) = _fixed_params(14);
-    localState(15, 0) = _fixed_params(15);
-    localState(16, 0) = _fixed_params(16);
-    localState(17, 0) = _fixed_params(17);
-    localState(18, 0) = _fixed_params(18);
-    localState(19, 0) = _fixed_params(19);
-    localState(20, 0) = _fixed_params(20);
-    localState(24, 0) = _fixed_params(21);
-
-    localState(21, 0) = parameters[0];
-    localState(22, 0) = parameters[1];
-    localState(23, 0) = parameters[2];
-  }
-  else
-  {
-    std::cout << "You have not specified the phase!";
-    throw;
-  }
-
-  // Estimate the signal
-  ukfMatrixType estimatedSignal(this->GetNumberOfValues(), 1);
-
-  //_model->F(localState);
-  _model->H(localState, estimatedSignal);
-
-  // Compute the error between the estimated signal and the acquired one
-  ukfPrecisionType err = 0.0;
-  this->computeError(estimatedSignal, _signal, err);
-
-  // Return the result
-  residual = err;
-  return residual;
-}
-
-void itk::DiffusionPropagatorCostFunction::GetDerivative(const ParametersType &parameters, DerivativeType &derivative) const
-{
-  // We use numerical derivative
-  // slope = [f(x+h) - f(x-h)] / (2h)
-
-  ParametersType p_h(this->GetNumberOfParameters());  // for f(x+h)
-  ParametersType p_hh(this->GetNumberOfParameters()); // for f(x-h)
-
-  // The size of the derivative is not set by default,
-  // so we have to do it manually
-  derivative.SetSize(this->GetNumberOfParameters());
-
-  // Set parameters
-  for (unsigned int it = 0; it < this->GetNumberOfParameters(); ++it)
-  {
-    p_h[it] = parameters[it];
-    p_hh[it] = parameters[it];
-  }
-
-  // Calculate derivative for each parameter (reference to the wikipedia page: Numerical Differentiation)
-  for (unsigned int it = 0; it < this->GetNumberOfParameters(); ++it)
-  {
-    // Optimal h is sqrt(epsilon machine) * x
-    double h = std::sqrt(2.22e-16) * std::abs(parameters[it]);
-
-    // Volatile, otherwise compiler will optimize the value for dx
-    volatile double xph = parameters[it] + h;
-
-    // For taking into account the rounding error
-    double dx = xph - parameters[it];
-
-    // Compute the slope
-    p_h[it] = xph;
-
-    //p_hh[it] = parameters[it] - h;
-    derivative[it] = (this->GetValue(p_h) - this->GetValue(p_hh)) / dx;
-
-    // Set parameters back for next iteration
-    p_h[it] = parameters[it];
-    p_hh[it] = parameters[it];
-  }
-}
-
-void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &state, ukfVectorType &signal, FilterModel *model)
-{
-  CostType::Pointer cost = CostType::New();
-  OptimizerType::Pointer optimizer = OptimizerType::New();
-
-  // Fill in array of parameters we are not intented to optimized
-  // We still need to pass this parameters to optimizer because we need to compute
-  // estimated signal during optimization and it requireds full state
-  mtx.Lock();
-  ukfVectorType fixed;
-  fixed.resize(12);
-  fixed(0) = state(0);
-  fixed(1) = state(1);
-  fixed(2) = state(2);
-  fixed(3) = state(7);
-  fixed(4) = state(8);
-  fixed(5) = state(9);
-  fixed(6) = state(14);
-  fixed(7) = state(15);
-  fixed(8) = state(16);
-
-  fixed(9) = state(21);
-  fixed(10) = state(22);
-  fixed(11) = state(23);
-
-  // std::cout << "state before\n " << state << std::endl;
-
-  ukfVectorType state_temp;
-  state_temp.resize(13);
-  state_temp(0) = state(3);
-  state_temp(1) = state(4);
-  state_temp(2) = state(5);
-  state_temp(3) = state(6);
-  state_temp(4) = state(10);
-  state_temp(5) = state(11);
-  state_temp(6) = state(12);
-  state_temp(7) = state(13);
-  state_temp(8) = state(17);
-  state_temp(9) = state(18);
-  state_temp(10) = state(19);
-  state_temp(11) = state(20);
-
-  state_temp(12) = state(24);
-  mtx.Unlock();
-
-  cost->SetNumberOfParameters(state_temp.size());
-  cost->SetNumberOfFixed(fixed.size());
-  cost->SetNumberOfValues(signal.size());
-  cost->SetSignalValues(signal);
-  cost->SetModel(model);
-  cost->SetFixed(fixed);
-  cost->SetPhase(1);
-
-  optimizer->SetCostFunction(cost);
-
-  CostType::ParametersType p(cost->GetNumberOfParameters());
-
-  mtx.Lock();
-  // Fill p
-  for (int it = 0; it < state_temp.size(); ++it)
-    p[it] = state_temp[it];
-  mtx.Unlock();
-
-  optimizer->SetInitialPosition(p);
-  optimizer->SetProjectedGradientTolerance(1e-12);
-  optimizer->SetMaximumNumberOfIterations(500);
-  optimizer->SetMaximumNumberOfEvaluations(500);
-  optimizer->SetMaximumNumberOfCorrections(10);     // The number of corrections to approximate the inverse hessian matrix
-  optimizer->SetCostFunctionConvergenceFactor(1e1); // Precision of the solution: 1e+12 for low accuracy; 1e+7 for moderate accuracy and 1e+1 for extremely high accuracy.
-  optimizer->SetTrace(false);                       // Print debug info
-  mtx.Lock();
-  // Set bounds
-  OptimizerType::BoundSelectionType boundSelect(cost->GetNumberOfParameters());
-  OptimizerType::BoundValueType upperBound(cost->GetNumberOfParameters());
-  OptimizerType::BoundValueType lowerBound(cost->GetNumberOfParameters());
-
-  boundSelect.Fill(2); // BOTHBOUNDED = 2
-  lowerBound.Fill(0.0);
-  upperBound.Fill(3000.0);
-
-  // Lower bound
-  // First bi-exponential parameters
-  lowerBound[0] = lowerBound[1] = 1.0;
-  lowerBound[2] = lowerBound[3] = 0.1;
-
-  // Second bi-exponential
-  lowerBound[4] = lowerBound[5] = 1.0;
-  lowerBound[6] = lowerBound[7] = 0.1;
-
-  // Third bi-exponential
-  lowerBound[8] = lowerBound[9] = 1.0;
-  lowerBound[10] = lowerBound[11] = 0.1;
-
-  // w1 & w2 & w3 in [0,1]
-  //lowerBound[12] = lowerBound[13] = lowerBound[14] = 0.0;
-  // free water between 0 and 1
-  //lowerBound[15] = 0.0;
-  lowerBound[12] = 0.0;
-
-  // Upper bound
-  // First bi-exponential
-  upperBound[0] = upperBound[1] = upperBound[2] = upperBound[3] = 3000.0;
-
-  // Second bi-exponential
-  upperBound[4] = upperBound[5] = upperBound[6] = upperBound[7] = 3000.0;
-
-  // Third bi-exponential
-  upperBound[8] = upperBound[9] = upperBound[10] = upperBound[11] = 3000.0;
-
-  //upperBound[12] = upperBound[13] = upperBound[14] = 1.0;
-  //upperBound[15] = 1.0;
-  upperBound[12] = 1.0;
-  mtx.Unlock();
-
-  optimizer->SetBoundSelection(boundSelect);
-  optimizer->SetUpperBound(upperBound);
-  optimizer->SetLowerBound(lowerBound);
-  optimizer->StartOptimization();
-
-  p = optimizer->GetCurrentPosition();
-  mtx.Lock();
-  // Write back the state
-  for (int it = 0; it < state_temp.size(); ++it)
-    state_temp[it] = p[it];
-
-  // Fill back the state tensor to return it the callee
-  state(0) = fixed(0);
-  state(1) = fixed(1);
-  state(2) = fixed(2);
-  state(7) = fixed(3);
-  state(8) = fixed(4);
-  state(9) = fixed(5);
-  state(14) = fixed(6);
-  state(15) = fixed(7);
-  state(16) = fixed(8);
-
-  state(21) = fixed(9);
-  state(22) = fixed(10);
-  state(23) = fixed(11);
-
-  state(3) = state_temp(0);
-  state(4) = state_temp(1);
-  state(5) = state_temp(2);
-  state(6) = state_temp(3);
-  state(10) = state_temp(4);
-  state(11) = state_temp(5);
-  state(12) = state_temp(6);
-  state(13) = state_temp(7);
-  state(17) = state_temp(8);
-  state(18) = state_temp(9);
-  state(19) = state_temp(10);
-  state(20) = state_temp(11);
-  state(24) = state_temp(12);
-  mtx.Unlock();
-
-  // Second phase of optimization (optional)
-  // In this phase only w1, w2, w3 are optimizing
-
-  CostType::Pointer cost2 = CostType::New();
-  OptimizerType::Pointer optimizer2 = OptimizerType::New();
-
-  mtx.Lock();
-  // Fill in array of parameters we are not intented to optimized
-  // We still need to pass this parameters to optimizer because we need to compute
-  // estimated signal during optimization and it requireds full state
-  fixed.resize(22);
-  fixed(0) = state(0);
-  fixed(1) = state(1);
-  fixed(2) = state(2);
-  fixed(3) = state(3);
-  fixed(4) = state(4);
-  fixed(5) = state(5);
-  fixed(6) = state(6);
-  fixed(7) = state(7);
-  fixed(8) = state(8);
-  fixed(9) = state(9);
-  fixed(10) = state(10);
-  fixed(11) = state(11);
-  fixed(12) = state(12);
-  fixed(13) = state(13);
-  fixed(14) = state(14);
-  fixed(15) = state(15);
-  fixed(16) = state(16);
-  fixed(17) = state(17);
-  fixed(18) = state(18);
-  fixed(19) = state(19);
-  fixed(20) = state(20);
-  fixed(21) = state(24);
-
-  // std::cout << "state before\n " << state << std::endl;
-
-  state_temp.resize(3);
-  state_temp(0) = state(21);
-  state_temp(1) = state(22);
-  state_temp(2) = state(23);
-  mtx.Unlock();
-
-  cost2->SetNumberOfParameters(state_temp.size());
-  cost2->SetNumberOfFixed(fixed.size());
-  cost2->SetNumberOfValues(signal.size());
-  cost2->SetSignalValues(signal);
-  cost2->SetModel(model);
-  cost2->SetFixed(fixed);
-  cost2->SetPhase(2);
-
-  optimizer2->SetCostFunction(cost2);
-
-  CostType::ParametersType p2(cost2->GetNumberOfParameters());
-
-  // Fill p
-  mtx.Lock();
-  for (int it = 0; it < state_temp.size(); ++it)
-    p2[it] = state_temp[it];
-  mtx.Unlock();
-
-  optimizer2->SetInitialPosition(p2);
-  optimizer2->SetProjectedGradientTolerance(1e-12);
-  optimizer2->SetMaximumNumberOfIterations(500);
-  optimizer2->SetMaximumNumberOfEvaluations(500);
-  optimizer2->SetMaximumNumberOfCorrections(10);     // The number of corrections to approximate the inverse hessian matrix
-  optimizer2->SetCostFunctionConvergenceFactor(1e1); // Precision of the solution: 1e+12 for low accuracy; 1e+7 for moderate accuracy and 1e+1 for extremely high accuracy.
-  optimizer2->SetTrace(false);                       // Print debug info
-
-  mtx.Lock();
-  // Set bounds
-  OptimizerType::BoundSelectionType boundSelect2(cost2->GetNumberOfParameters());
-  OptimizerType::BoundValueType upperBound2(cost2->GetNumberOfParameters());
-  OptimizerType::BoundValueType lowerBound2(cost2->GetNumberOfParameters());
-
-  boundSelect2.Fill(2); // BOTHBOUNDED = 2
-  lowerBound2.Fill(0.0);
-  upperBound2.Fill(1.0);
-
-  // Lower bound
-  lowerBound2[0] = lowerBound2[1] = lowerBound2[2] = 0.0;
-
-  // Upper bound
-  upperBound2[0] = upperBound2[1] = upperBound2[2] = 1.0;
-  mtx.Unlock();
-  optimizer2->SetBoundSelection(boundSelect2);
-  optimizer2->SetUpperBound(upperBound2);
-  optimizer2->SetLowerBound(lowerBound2);
-  optimizer2->StartOptimization();
-
-  p2 = optimizer2->GetCurrentPosition();
-
-  mtx.Lock();
-  // Write back the state
-  for (int it = 0; it < state_temp.size(); ++it)
-    state_temp[it] = p2[it];
-
-  // Fill back the state tensor to return it the callee
-  state(0) = fixed(0);
-  state(1) = fixed(1);
-  state(2) = fixed(2);
-  state(3) = fixed(3);
-  state(4) = fixed(4);
-  state(5) = fixed(5);
-  state(6) = fixed(6);
-  state(7) = fixed(7);
-  state(8) = fixed(8);
-  state(9) = fixed(9);
-  state(10) = fixed(10);
-  state(11) = fixed(11);
-  state(12) = fixed(12);
-  state(13) = fixed(13);
-  state(14) = fixed(14);
-  state(15) = fixed(15);
-  state(16) = fixed(16);
-  state(17) = fixed(17);
-  state(18) = fixed(18);
-  state(19) = fixed(19);
-  state(20) = fixed(20);
-  state(24) = fixed(21);
-
-  state(21) = state_temp(0);
-  state(22) = state_temp(1);
-  state(23) = state_temp(2);
-  mtx.Unlock();
-
-  // std::cout << "state after \n"
-  //           << state << std::endl;
 }
 
 void Tractography::InverseStateDiffusionPropagator(stdVecState &reference, stdVecState &inverted)
