@@ -11,8 +11,7 @@ void Ridg_BiExp_FW::F(ukfMatrixType& X, ukfVectorType s, const ukfMatrixType& co
 
 	UtilMath<ukfPrecisionType, ukfMatrixType, ukfVectorType> m;
 
-	ukfVectorType HighBSignalValues;
-	HighBSignalValues.resize(signal_mask.size());
+	ukfVectorType HighBSignalValues(signal_mask.size());
 	for (int indx = 0; indx < signal_mask.size(); ++indx)
 		HighBSignalValues(indx) = s(signal_mask(indx));
 
@@ -29,8 +28,7 @@ void Ridg_BiExp_FW::F(ukfMatrixType& X, ukfVectorType s, const ukfMatrixType& co
 	unsigned int n_of_dirs;
 	m.FindODFMaxima(exe_vol, dir_vol, ODF, conn, nu, max_odf_thresh, n_of_dirs);
 
-	ukfVectorType closest;
-	closest.resize(6);
+	ukfVectorType closest(6);
 	vec3_t m1;
 	vec3_t m_temp;
 	vec3_t o;

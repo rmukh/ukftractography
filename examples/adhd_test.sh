@@ -6,7 +6,7 @@ SRC="../UKFTractography"
 logFile="log.txt"
 
 # BINARY
-BINARY='../build/UKFTractography-build/UKFTractography/bin/UKFTractography'
+BINARY='--tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes ../build/UKFTractography-build/UKFTractography/bin/UKFTractography'
 
 # VOLUME
 dwi_path="/home/rinat/Desktop/ukftests/dwi-Aligned-Ed-Bet-Merged-unring-Epi.nhdr"

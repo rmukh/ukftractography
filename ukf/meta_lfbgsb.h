@@ -34,29 +34,6 @@
 #include <iostream>
 #include <vector>
 
-struct Options
-{
-    double tol;
-    double functol;
-    double constrtol;
-    int maxIter;
-    int m;
-    Options()
-    {
-        tol = 1e-9;
-        functol = 1e-10;
-        constrtol = 1e-2;
-        maxIter = 500;
-        m = 6;
-    }
-};
-
-const double EPS = 2.2204e-016;
-
-typedef Eigen::MatrixXd Matrix;
-typedef Eigen::VectorXd Vector;
-typedef Eigen::VectorXd::Scalar Scalar;
-
 #define INF HUGE_VAL
 #define Assert(x, m)                  \
     if (!(x))                         \
@@ -70,7 +47,6 @@ typedef Eigen::VectorXd::Scalar Scalar;
 #define Debug(x)
 #else
 #define Debug(x)                     \
-    if (false)                       \
     {                                \
         std::cout << "DEBUG: " << x; \
         std::cout << std::endl;      \

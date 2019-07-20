@@ -401,6 +401,7 @@ private:
   // TODO smartpointer
   model_type _filter_model_type;
   FilterModel *_model;
+
   signalMaskType signal_mask;
 
   bool debug;

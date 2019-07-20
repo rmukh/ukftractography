@@ -705,9 +705,10 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
   }
 
   std::vector<SeedPointInfo> seed_infos2;
+  seed_infos2.reserve(6 * starting_points.size());
   //const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
   //assert(num_of_threads > 0);
-const int num_of_threads = 1;
+  const int num_of_threads = 1;
   // Pack information for each seed point.
   std::cout << "Processing " << starting_points.size() << " starting points with " << num_of_threads << " threads" << std::endl;
   {
@@ -910,8 +911,7 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     // Compute number of branches at the seed point using spherical ridgelets
     UtilMath<ukfPrecisionType, ukfMatrixType, ukfVectorType> m;
 
-    ukfVectorType HighBSignalValues;
-    HighBSignalValues.resize(signal_mask.size());
+    ukfVectorType HighBSignalValues(signal_mask.size());
     for (int indx = 0; indx < signal_mask.size(); ++indx)
       HighBSignalValues(indx) = signal_values(signal_mask(indx));
 
@@ -928,13 +928,19 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     // Let's find Maxima of ODF and values in that direction
     ukfMatrixType exe_vol;
     ukfMatrixType dir_vol;
-    ukfVectorType ODF_val_at_max;
-    unsigned n_of_dirs;
+    ukfVectorType ODF_val_at_max(6, 1);
+    unsigned n_of_dirs = 0;
 
     m.FindODFMaxima(exe_vol, dir_vol, ODF, conn, nu, max_odf_thresh, n_of_dirs);
+    if (n_of_dirs == 0)
+    {
+      cout << "exe_vol " << exe_vol << endl;
+      cout << "dir_vol " << dir_vol << endl;
+    }
 
-    ODF_val_at_max.resize(6, 1);
-    for (unsigned j = 0; j < 6; ++j)
+    unsigned exe_vol_size = std::min(static_cast<unsigned>(exe_vol.size()), static_cast<unsigned>(6));
+    ODF_val_at_max.setZero();
+    for (unsigned j = 0; j < exe_vol_size; ++j)
     {
       ODF_val_at_max(j) = ODF(exe_vol(j));
     }
@@ -1051,7 +1057,9 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
 
     // Estimate the initial state
     //InitLoopUKF(state, p, signal_values[i], dNormMSE);
+    //mtx.Lock();
     NonLinearLeastSquareOptimization(thread_id, state, signal_values, _model);
+    //mtx.Unlock();
 
     // Output of the filter
     tmp_info_state = ConvertVector<State, stdVecState>(state);
@@ -1210,6 +1218,7 @@ bool Tractography::Run()
     std::cout << "Seeding file provided. Seeding thresholds will be ignored" << std::endl;
 
   Init(primary_seed_infos);
+
   if (primary_seed_infos.size() < 1)
   {
     std::cerr << "No valid seed points available!" << std::endl;
@@ -1551,8 +1560,7 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   // Fill in array of parameters we are not intented to optimized
   // We still need to pass this parameters to optimizer because we need to compute
   // estimated signal during optimization and it requireds full state
-  ukfVectorType fixed_params;
-  fixed_params.resize(12);
+  ukfVectorType fixed_params(12);
   fixed_params(0) = state(0);
   fixed_params(1) = state(1);
   fixed_params(2) = state(2);
@@ -1567,8 +1575,7 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   fixed_params(10) = state(22);
   fixed_params(11) = state(23);
 
-  Vector state_temp;
-  state_temp.resize(13);
+  ukfVectorType state_temp(13);
   state_temp(0) = state(3);
   state_temp(1) = state(4);
   state_temp(2) = state(5);
@@ -1585,7 +1592,7 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   state_temp(12) = state(24);
 
   // init predefined constants
-  Vector lowerBound(13), upperBound(13);
+  ukfVectorType lowerBound(13), upperBound(13);
   // Lower bound
   // First bi-exponential parameters
   lowerBound[0] = lowerBound[1] = 1.0;
@@ -1618,14 +1625,34 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   //upperBound[12] = upperBound[13] = upperBound[14] = 1.0;
   //upperBound[15] = 1.0;
   upperBound[12] = 1.0;
-  cout << "before \n " << state_temp << endl;
+
+  //demo
+  /*
+  cout << "demo \n";
+  state_temp << 215.629,
+      61.3256,
+      150.94,
+      42.9279,
+      215.629,
+      61.3256,
+      150.94,
+      42.9279,
+      215.629,
+      61.3256,
+      150.94,
+      42.9279,
+      0.05;
+      */
+  //cout << "before \n " << state_temp << endl;
   // init solver with bounds
-  LBFGSB MySolver(lowerBound, upperBound, model);
-  MySolver._signal = signal;
-  MySolver._fixed_params = fixed_params;
+  std::auto_ptr<LFBGSB> MySolver(new LFBGSB(lowerBound, upperBound, _signal_data->gradients(), _signal_data->GetBValues(), SetIdentityScaled(D_ISO), 0.7));
+
+  (*MySolver)._signal = signal;
+  (*MySolver)._fixed_params = fixed_params;
   // solve the problem
-  MySolver.Solve(state_temp);
-  cout << "after \n" << MySolver.XOpt << endl;
+  (*MySolver).Solve(state_temp);
+  cout << "\n after \n" << (*MySolver).XOpt << endl;
+  //exit(0);
 
   //MySolver.XOpt;
 
