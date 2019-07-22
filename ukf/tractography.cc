@@ -707,9 +707,9 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
 
   seed_infos.reserve(starting_points.size() * 6);
 
-  const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
+  //const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
   //assert(num_of_threads > 0);
-  //int num_of_threads = 2;
+  int num_of_threads = 1;
   _lbfgsb.reserve(num_of_threads); //Allocate, but do not assign
   for (int i = 0; i < num_of_threads; i++)
   {

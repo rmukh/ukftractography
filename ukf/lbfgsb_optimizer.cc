@@ -117,7 +117,6 @@ void itk::DiffusionPropagatorCostFunction::GetDerivative(const ParametersType &p
     {
         // Optimal h is sqrt(epsilon machine) * x
         double h = std::sqrt(2.22e-16) * std::abs(parameters[it]);
-
         // Volatile, otherwise compiler will optimize the value for dx
         volatile double xph = parameters[it] + h;
 
@@ -244,14 +243,14 @@ void LBFGSBSolver::Optimize(State &state_inp, const ukfVectorType &signal_inp)
     // Fill p
     for (int it = 0; it < state_temp.size(); ++it)
         p[it] = state_temp[it];
-
+    std::cout << "before " << p << std::endl;
     optimizer->SetInitialPosition(p);
     optimizer->SetProjectedGradientTolerance(1e-12);
     optimizer->SetMaximumNumberOfIterations(500);
     optimizer->SetMaximumNumberOfEvaluations(500);
     optimizer->SetMaximumNumberOfCorrections(10);     // The number of corrections to approximate the inverse hessian matrix
     optimizer->SetCostFunctionConvergenceFactor(1e1); // Precision of the solution: 1e+12 for low accuracy; 1e+7 for moderate accuracy and 1e+1 for extremely high accuracy.
-    optimizer->SetTrace(true);                        // Print debug info
+    optimizer->SetTrace(false);                        // Print debug info
 
     optimizer->SetBoundSelection(boundSelect);
     optimizer->SetUpperBound(upperBound);
@@ -266,9 +265,10 @@ void LBFGSBSolver::Optimize(State &state_inp, const ukfVectorType &signal_inp)
     // std::cout << "state before " << p << std::endl;
 
     optimizer->StartOptimization();
-    /*
-    p = optimizer->GetCurrentPosition();
 
+    p = optimizer->GetCurrentPosition();
+    std::cout << "after " << p << std::endl;
+    /*
     // Fill back the state tensor to return it the callee
     state(0) = fixed(0);
     state(1) = fixed(1);
