@@ -709,8 +709,8 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
 
   const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
   //assert(num_of_threads > 0);
-//int num_of_threads = 2;
-    _lbfgsb.reserve(num_of_threads); //Allocate, but do not assign
+  //int num_of_threads = 2;
+  _lbfgsb.reserve(num_of_threads); //Allocate, but do not assign
   for (int i = 0; i < num_of_threads; i++)
   {
     _lbfgsb.push_back(new LBFGSBSolver(_model)); // Create one LFBGS nonlinear optimizer for each thread
@@ -918,8 +918,7 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     // Compute number of branches at the seed point using spherical ridgelets
     UtilMath<ukfPrecisionType, ukfMatrixType, ukfVectorType> m;
 
-    ukfVectorType HighBSignalValues;
-    HighBSignalValues.resize(signal_mask.size());
+    ukfVectorType HighBSignalValues(signal_mask.size());
     for (int indx = 0; indx < signal_mask.size(); ++indx)
       HighBSignalValues(indx) = signal_values(signal_mask(indx));
 
@@ -936,13 +935,14 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     // Let's find Maxima of ODF and values in that direction
     ukfMatrixType exe_vol;
     ukfMatrixType dir_vol;
-    ukfVectorType ODF_val_at_max;
-    unsigned n_of_dirs;
+    ukfVectorType ODF_val_at_max(6, 1);
+    unsigned n_of_dirs = 0;
 
     m.FindODFMaxima(exe_vol, dir_vol, ODF, conn, nu, max_odf_thresh, n_of_dirs);
 
-    ODF_val_at_max.resize(6, 1);
-    for (unsigned j = 0; j < 6; ++j)
+    unsigned exe_vol_size = std::min(static_cast<unsigned>(exe_vol.size()), static_cast<unsigned>(6));
+    ODF_val_at_max.setZero();
+    for (unsigned j = 0; j < exe_vol_size; ++j)
     {
       ODF_val_at_max(j) = ODF(exe_vol(j));
     }
@@ -1061,11 +1061,11 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     //mtx.Lock();
     //std::cout << "state before " << state.transpose() << std::endl;
     //std::cout << "signal_values before " << signal_values.transpose() << std::endl;
-//mtx.Unlock();
-//mtx.Lock();
+    //mtx.Unlock();
+    //mtx.Lock();
     _lbfgsb[thread_id]->Optimize(state, signal_values);
- //   mtx.Unlock();
-//mtx.Lock();
+    //   mtx.Unlock();
+    //mtx.Lock();
     //std::cout << "state after " << state.transpose() << std::endl;
     //std::cout << "signal_values after " << signal_values.transpose() << std::endl;
     //mtx.Unlock();
