@@ -243,7 +243,7 @@ void LBFGSBSolver::Optimize(State &state_inp, const ukfVectorType &signal_inp)
     // Fill p
     for (int it = 0; it < state_temp.size(); ++it)
         p[it] = state_temp[it];
-    std::cout << "before " << p << std::endl;
+    //std::cout << "before " << p << std::endl;
     optimizer->SetInitialPosition(p);
     optimizer->SetProjectedGradientTolerance(1e-12);
     optimizer->SetMaximumNumberOfIterations(500);
@@ -267,7 +267,7 @@ void LBFGSBSolver::Optimize(State &state_inp, const ukfVectorType &signal_inp)
     optimizer->StartOptimization();
 
     p = optimizer->GetCurrentPosition();
-    std::cout << "after " << p << std::endl;
+    //std::cout << "after " << p << std::endl;
     /*
     // Fill back the state tensor to return it the callee
     state(0) = fixed(0);

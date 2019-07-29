@@ -20,13 +20,13 @@ if(NOT DEFINED ITK_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
 
   ExternalProject_SetIfNotDefined(
     ${CMAKE_PROJECT_NAME}_${proj}_GIT_REPOSITORY
-    "${EP_GIT_PROTOCOL}://github.com/Slicer/ITK.git"
+    "${EP_GIT_PROTOCOL}://github.com/InsightSoftwareConsortium/ITK.git"
     QUIET
     )
 
   ExternalProject_SetIfNotDefined(
     ${CMAKE_PROJECT_NAME}_${proj}_GIT_TAG
-    "f9ae0a051440b674c82dfa41c5054b2c7308417e" # slicer-v4.13.0-2017-12-20-d92873e-2
+    "1724fc0f25cc6fa77bc60ef56161611333ba09f6" # slicer-v4.13.0-2017-12-20-d92873e-2
     QUIET
     )
 
