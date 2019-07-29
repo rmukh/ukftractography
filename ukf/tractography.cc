@@ -718,52 +718,53 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
 
   // Pack information for each seed point.
   std::cout << "Processing " << starting_points.size() << " starting points with " << num_of_threads << " threads" << std::endl;
-
-  WorkDistribution work_distribution = GenerateWorkDistribution(num_of_threads, static_cast<int>(starting_points.size()));
-
-#if ITK_VERSION_MAJOR >= 5
-  itk::PlatformMultiThreader::Pointer threader = itk::PlatformMultiThreader::New();
-  threader->SetNumberOfWorkUnits(num_of_threads);
-  std::vector<std::thread> vectorOfThreads;
-  vectorOfThreads.reserve(num_of_threads);
-#else
-  itk::MultiThreader::Pointer threader = itk::MultiThreader::New();
-  threader->SetNumberOfThreads(num_of_threads);
-#endif
-  seed_init_thread_struct str;
-  str.tractography_ = this;
-  str.work_distribution = &work_distribution;
-
-  str.seed_infos_ = &seed_infos;
-  str.starting_points_ = &starting_points;
-  str.signal_values_ = &signal_values;
-  str.starting_params_ = &starting_params;
-
-  for (int i = 0; i < num_of_threads; i++)
   {
-#if ITK_VERSION_MAJOR >= 5
-    vectorOfThreads.push_back(std::thread(SeedInitThreadCallback, i, &str));
-#else
-    threader->SetMultipleMethod(i, SeedInitThreadCallback, &str);
-#endif
-  }
-#if ITK_VERSION_MAJOR < 5
-  threader->SetGlobalDefaultNumberOfThreads(num_of_threads);
-#else
-  itk::MultiThreaderBase::SetGlobalDefaultNumberOfThreads(num_of_threads);
-#endif
+    WorkDistribution work_distribution = GenerateWorkDistribution(num_of_threads, static_cast<int>(starting_points.size()));
 
 #if ITK_VERSION_MAJOR >= 5
-  for (auto &li : vectorOfThreads)
-  {
-    if (li.joinable())
+    itk::PlatformMultiThreader::Pointer threader = itk::PlatformMultiThreader::New();
+    threader->SetNumberOfWorkUnits(num_of_threads);
+    std::vector<std::thread> vectorOfThreads;
+    vectorOfThreads.reserve(num_of_threads);
+#else
+    itk::MultiThreader::Pointer threader = itk::MultiThreader::New();
+    threader->SetNumberOfThreads(num_of_threads);
+#endif
+    seed_init_thread_struct str;
+    str.tractography_ = this;
+    str.work_distribution = &work_distribution;
+
+    str.seed_infos_ = &seed_infos;
+    str.starting_points_ = &starting_points;
+    str.signal_values_ = &signal_values;
+    str.starting_params_ = &starting_params;
+
+    for (int i = 0; i < num_of_threads; i++)
     {
-      li.join();
-    }
-  }
+#if ITK_VERSION_MAJOR >= 5
+      vectorOfThreads.push_back(std::thread(SeedInitThreadCallback, i, &str));
 #else
-  threader->MultipleMethodExecute();
+      threader->SetMultipleMethod(i, SeedInitThreadCallback, &str);
 #endif
+    }
+#if ITK_VERSION_MAJOR < 5
+    threader->SetGlobalDefaultNumberOfThreads(num_of_threads);
+#else
+    itk::MultiThreaderBase::SetGlobalDefaultNumberOfThreads(num_of_threads);
+#endif
+
+#if ITK_VERSION_MAJOR >= 5
+    for (auto &li : vectorOfThreads)
+    {
+      if (li.joinable())
+      {
+        li.join();
+      }
+    }
+#else
+    threader->MultipleMethodExecute();
+#endif
+  }
 
   cout << "Final seeds vector size " << seed_infos.size() << std::endl;
 }
