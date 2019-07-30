@@ -1650,9 +1650,9 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   (*MySolver)._signal = signal;
   (*MySolver)._fixed_params = fixed_params;
   // solve the problem
-  cout << "\n before \n" << state_temp.transpose() << endl;
+  cout << "\n before " << state_temp.transpose() << endl;
   (*MySolver).Solve(state_temp);
-  cout << "\n after \n" << (*MySolver).XOpt.transpose() << endl;
+  cout << "\n after " << (*MySolver).XOpt.transpose() << endl;
   //exit(0);
 
   //MySolver.XOpt;

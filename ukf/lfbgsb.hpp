@@ -23,14 +23,23 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/* 
+ * based on the paper
+ * A LIMITED MEMORY ALGORITHM FOR BOUND CONSTRAINED OPTIMIZATION
+ * (Byrd, Lu, Nocedal, Zhu)
+ */
+/*
+   Redesigned, integrated, and improved by Rinat Mukhometzianov, 2019
+*/
 
 #ifndef LBFGSB_H_
 #define LBFGSB_H_
 
-#include "meta_lfbgsb.h"
 #include "ukf_types.h"
 #include "linalg.h"
 
+#include <stdexcept>
+#include <cmath>
 #include <list>
 #include <stdio.h>
 #include <iostream>
@@ -39,14 +48,24 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
-/* 
- * based on the paper
- * A LIMITED MEMORY ALGORITHM FOR BOUND CONSTRAINED OPTIMIZATION
- * (Byrd, Lu, Nocedal, Zhu)
- */
-/*
-	 Redesigned, integrated, and improved by Rinat Mukhometzianov, 2019
- */
+#define INF HUGE_VAL
+#define Assert(x, m)                  \
+    if (!(x))                         \
+    {                                 \
+        throw(std::runtime_error(m)); \
+    }
+
+#define FAST
+
+#ifdef FAST
+#define Debug(x)
+#else
+#define Debug(x)                     \
+    {                                \
+        std::cout << "DEBUG: " << x; \
+        std::cout << std::endl;      \
+    }
+#endif
 
 class LFBGSB
 {
@@ -168,17 +187,17 @@ public:
     void computeError(const ukfVectorType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
     {
         ukfPrecisionType sum = 0.0;
-        //ukfPrecisionType norm_sq_signal = 0.0;
+        ukfPrecisionType norm_sq_signal = 0.0;
         unsigned int N = signal.size() / 2;
 
         for (unsigned int i = 0; i < N; ++i)
         {
             ukfPrecisionType diff = signal(i) - signal_estimate(i);
             sum += diff * diff;
-            //norm_sq_signal += signal(i) * signal(i);
+            norm_sq_signal += signal(i) * signal(i);
         }
 
-        err = std::sqrt(sum / N); //norm_sq_signal;
+        err = sum / norm_sq_signal;
     }
 
     double functionValue(const ukfVectorType &x)
@@ -259,7 +278,7 @@ public:
         // Compute the error between the estimated signal and the acquired one
         ukfPrecisionType err = 0.0;
         computeError(estimatedSignal, _signal, err);
-        cout << err << " ";
+        //cout << err << " ";
 
         // Return the result
         residual = err;
@@ -358,13 +377,9 @@ public:
         //vector version
     }
 
-    /// <summary>
-    /// find cauchy point in x
-    /// </summary>
-    /// <parameter name="x">start in x</parameter>
-    void
-    GetGeneralizedCauchyPoint(ukfVectorType &x, ukfVectorType &g, ukfVectorType &x_cauchy,
-                              ukfVectorType &c)
+    // find cauchy point in x
+    // <parameter name="x">start in x</parameter>
+    void GetGeneralizedCauchyPoint(ukfVectorType &x, ukfVectorType &g, ukfVectorType &x_cauchy, ukfVectorType &c)
     {
         const int DIM = x.rows();
         // PAGE 8
@@ -377,25 +392,35 @@ public:
         // the feasible set is implicitly given by "SetOfT - {t_i==0}"
         ukfVectorType d = -g;
 
+        std::cout << "g " << g.transpose() << std::endl; //fix this!
+        std::cout << "ub " << ub.transpose() << std::endl;
+        std::cout << "lb " << lb.transpose() << std::endl;
+        std::cout << "x " << x.transpose() << std::endl;
+
         // n operations
         for (int j = 0; j < DIM; j++)
         {
-            if (g(j) == 0)
+            double tmp = 0.0;
+
+            if (g(j) == 0.0)
             {
                 SetOfT.push_back(std::make_pair(j, INF));
             }
             else
             {
-                double tmp = 0;
-                if (g(j) < 0)
+                if (g(j) < 0.0)
                     tmp = (x(j) - ub(j)) / g(j);
-                else
+                else if (g(j) > 0.0)
                     tmp = (x(j) - lb(j)) / g(j);
+
                 SetOfT.push_back(std::make_pair(j, tmp));
             }
-            if (g(j) < EPS || isnan(g(j)))
+
+            if (tmp < EPS)
                 d(j) = 0.0;
         }
+
+        std::cout << "d " << d.transpose() << std::endl;
 
         Debug(d.transpose());
 
@@ -412,7 +437,7 @@ public:
         // f' := 	g^T*d = -d^Td
         double f_prime = -d.dot(d); // (n operations)
         // f'' :=	\theta*d^T*d-d^T*W*M*W^T*d = -\theta*f' - p^T*M*p
-        double f_doubleprime = (double)(-1.0 * theta) * f_prime - p.dot(M * p); // (O(m^2) operations)
+        double f_doubleprime = -theta * f_prime - p.dot(M * p); // (O(m^2) operations)
         double f_primezero = -theta * f_prime;
         // \delta t_min :=	-f'/f''
         double dt_min = -f_prime / f_doubleprime;
@@ -421,21 +446,32 @@ public:
         // b := 	argmin {t_i , t_i >0}
 
         int i = 0;
-        for (int j = 0; j < DIM; j++)
-        {
-            i = j;
-            if (SetOfT[SortedIndices[j]].second != 0)
-                break;
-        }
-        int b = SortedIndices[i];
+        // for (int j = 0; j < DIM; j++)
+        // {
+        //     i = j;
+        //     if (SetOfT[SortedIndices[j]].second > 0)
+        //         break;
+        // }
+        std::cout << "SetOfT\n";
+        for (auto i: SetOfT)
+            std::cout << i.second << " ";
+
+        std::cout << "SortedIndices\n";
+        for (auto i : SortedIndices)
+            std::cout << i << " ";
+        
+        std::cout << std::endl;
+        int b = SortedIndices[0];
+        std::cout << "b " << b << std::endl;
         // see below
         // t        			:= 	min{t_i : i in F}
         double t = SetOfT[b].second;
+        std::cout << "t " << t << std::endl;
         // \delta t 			:= 	t - 0
         double dt = t - t_old;
 
         // examination of subsequent segments
-        while ((dt_min >= dt) && (i < DIM))
+        while ((dt_min > dt) && (i < DIM))
         {
             if (d(b) > 0)
                 x_cauchy(b) = ub(b);
@@ -446,11 +482,11 @@ public:
             double zb = x_cauchy(b) - x(b);
             // c   :=  c +\delta t*p
             c += dt * p;
-            double gb = (double)g(b);
+            double gb = g(b);
             // cache
             ukfVectorType wbt = W.row(b);
 
-            f_prime += dt * f_doubleprime + gb * gb + (double)theta * gb * zb - gb * wbt.transpose() * (M * c);
+            f_prime += dt * f_doubleprime + gb * gb + theta * gb * zb - gb * wbt.transpose() * (M * c);
             f_doubleprime -= theta * gb * gb - 2.0 * (gb * (wbt.dot(M * p))) - gb * gb * wbt.transpose() * (M * wbt);
             f_doubleprime = std::max(EPS * f_primezero, f_doubleprime);
             p += gb * wbt.transpose();
@@ -475,21 +511,21 @@ public:
         {
             x_cauchy(SortedIndices[ii]) = x(SortedIndices[ii]) + t_old * d(SortedIndices[ii]);
         }
+
         Debug(x_cauchy.transpose());
 
         c += dt_min * p;
         Debug(c.transpose());
     }
 
-    /// <summary>
-    /// find valid alpha for (8.5)
-    /// </summary>
-    /// <parameter name="x_cp">cauchy point</parameter>
-    /// <parameter name="du">unconstrained solution of subspace minimization</parameter>
-    /// <parameter name="FreeVariables">flag (1 if is free variable and 0 if is not free variable)</parameter>
+    // find valid alpha for (8.5)
+    // <parameter name="x_cp">cauchy point</parameter>
+    // <parameter name="du">unconstrained solution of subspace minimization</parameter>
+    // <parameter name="FreeVariables">flag (1 if is free variable and 0 if is not free variable)</parameter>
     double FindAlpha(ukfVectorType &x_cp, ukfVectorType &du, std::vector<int> &FreeVariables)
     {
-        /* this returns
+        /* 
+         * this returns
 		 * a* = max {a : a <= 1 and  l_i-xc_i <= a*d_i <= u_i-xc_i}
 		 */
         double alphastar = 1;
@@ -504,41 +540,35 @@ public:
         return alphastar;
     }
 
-    /// <summary>
-    /// using linesearch to determine step width
-    /// </summary>
-    /// <parameter name="x">start in x</parameter>
-    /// <parameter name="dx">direction</parameter>
-    /// <parameter name="f">current value of objective (will be changed)</parameter>
-    /// <parameter name="g">current gradient of objective (will be changed)</parameter>
-    /// <parameter name="t">step width (will be changed)</parameter>
+    // using linesearch to determine step width
+    // <parameter name="x">start in x</parameter>
+    // <parameter name="dx">direction</parameter>
+    // <parameter name="f">current value of objective (will be changed)</parameter>
+    // <parameter name="g">current gradient of objective (will be changed)</parameter>
+    // <parameter name="t">step width (will be changed)</parameter>
     void LineSearch(ukfVectorType &x, ukfVectorType dx, double &f, ukfVectorType &g, double &t)
     {
-        const double alpha = 0.2;
-        const double beta = 0.8;
-
         const double f_in = f;
         const ukfVectorType g_in = g;
-        const double Cache = alpha * g_in.dot(dx);
 
-        t = 1.0;
+        const double Cache = 0.2 * g_in.dot(dx);
+
+        t = 0.1;
         f = functionValue(x + t * dx);
 
         while (f > f_in + t * Cache)
         {
-            t *= beta;
+            t *= 0.8;
             f = functionValue(x + t * dx);
         }
+
         functionGradient(x + t * dx, g);
         x += t * dx;
     }
 
-    /// <summary>
-    /// direct primal approach
-    /// </summary>
-    /// <parameter name="x">start in x</parameter>
-    void SubspaceMinimization(ukfVectorType &x_cauchy, ukfVectorType &x, ukfVectorType &c, ukfVectorType &g,
-                              ukfVectorType &SubspaceMin)
+    // direct primal approach
+    // <parameter name="x">start in x</parameter>
+    void SubspaceMinimization(ukfVectorType &x_cauchy, ukfVectorType &x, ukfVectorType &c, ukfVectorType &g, ukfVectorType &SubspaceMin)
     {
         // cached value: ThetaInverse=1/theta;
         double theta_inverse = 1.0 / theta;

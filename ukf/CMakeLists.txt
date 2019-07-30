@@ -67,7 +67,6 @@ set(MODULE_SRCS
   filter_ridg.cc
   UKFTractographyCLP.h
   lfbgsb.hpp
-  meta_lfbgsb.h
   )
 
 set(MODULE_INCLUDE_DIRECTORIES

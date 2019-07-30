@@ -6,7 +6,7 @@ SRC="../UKFTractography"
 logFile="log.txt"
 
 # BINARY
-BINARY='--tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes ../build/UKFTractography-build/UKFTractography/bin/UKFTractography'
+BINARY='../build/UKFTractography-build/UKFTractography/bin/UKFTractography'
 
 # VOLUME
 dwi_path="/home/rinat/Desktop/ukftests/dwi-Aligned-Ed-Bet-Merged-unring-Epi.nhdr"
@@ -21,6 +21,7 @@ seeds_path="/home/rinat/Desktop/ukftests/Segmentation-label_363x.nrrd"
 output_path='/home/rinat/Desktop/ukftests/adhd363/seeds_tc_363x_NO_init_multi.vtk'
 
 # --seedsFile $seeds_path \
+
 eval $BINARY \
  --dwiFile $dwi_path \
  --maskFile $mask_path \
