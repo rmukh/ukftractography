@@ -55,18 +55,6 @@
         throw(std::runtime_error(m)); \
     }
 
-#define FAST
-
-#ifdef FAST
-#define Debug(x)
-#else
-#define Debug(x)                     \
-    {                                \
-        std::cout << "DEBUG: " << x; \
-        std::cout << std::endl;      \
-    }
-#endif
-
 class LFBGSB
 {
     ukfMatrixType W, M;
@@ -82,7 +70,7 @@ public:
     const double EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-12), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast)
+        : lb(l), ub(u), tol(1e-6), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast)
     {
         W = ukfMatrixType::Zero(l.rows(), 0);
         M = ukfMatrixType::Zero(0, 0);
@@ -377,7 +365,7 @@ public:
         //vector version
     }
 
-    // find cauchy point in x
+    // Find cauchy point in x
     // <parameter name="x">start in x</parameter>
     void GetGeneralizedCauchyPoint(ukfVectorType &x, ukfVectorType &g, ukfVectorType &x_cauchy, ukfVectorType &c)
     {
@@ -387,14 +375,11 @@ public:
         // Given x,l,u,g, and B = \theta I-WMW
 
         // {all t_i} = { (idx,value), ... }
-        // TODO: use "std::set" ?
         std::vector<std::pair<int, double>> SetOfT;
         // the feasible set is implicitly given by "SetOfT - {t_i==0}"
         ukfVectorType d = -g;
 
         std::cout << "g " << g.transpose() << std::endl; //fix this!
-        std::cout << "ub " << ub.transpose() << std::endl;
-        std::cout << "lb " << lb.transpose() << std::endl;
         std::cout << "x " << x.transpose() << std::endl;
 
         // n operations
@@ -421,8 +406,6 @@ public:
         }
 
         std::cout << "d " << d.transpose() << std::endl;
-
-        Debug(d.transpose());
 
         // paper: using heapsort
         // sortedindices [1,0,2] means the minimal element is on the 1th entry
@@ -452,14 +435,14 @@ public:
         //     if (SetOfT[SortedIndices[j]].second > 0)
         //         break;
         // }
-        std::cout << "SetOfT\n";
-        for (auto i: SetOfT)
+        std::cout << "\nSetOfT ";
+        for (auto i : SetOfT)
             std::cout << i.second << " ";
 
-        std::cout << "SortedIndices\n";
+        std::cout << "\nSortedIndices ";
         for (auto i : SortedIndices)
             std::cout << i << " ";
-        
+
         std::cout << std::endl;
         int b = SortedIndices[0];
         std::cout << "b " << b << std::endl;
@@ -505,17 +488,12 @@ public:
         dt_min = std::max(dt_min, 0.0);
         t_old += dt_min;
 
-        Debug(SortedIndices[0] << " " << SortedIndices[1]);
-
         for (int ii = i; ii < x_cauchy.rows(); ii++)
         {
             x_cauchy(SortedIndices[ii]) = x(SortedIndices[ii]) + t_old * d(SortedIndices[ii]);
         }
 
-        Debug(x_cauchy.transpose());
-
         c += dt_min * p;
-        Debug(c.transpose());
     }
 
     // find valid alpha for (8.5)
@@ -575,11 +553,9 @@ public:
 
         // size of "t"
         std::vector<int> FreeVariablesIndex;
-        Debug(x_cauchy.transpose());
 
         for (int i = 0; i < x_cauchy.rows(); i++)
         {
-            Debug(x_cauchy(i) << " " << ub(i) << " " << lb(i));
             if ((x_cauchy(i) != ub(i)) && (x_cauchy(i) != lb(i)))
             {
                 FreeVariablesIndex.push_back(i);
@@ -592,19 +568,12 @@ public:
         for (int i = 0; i < FreeVarCount; i++)
             WZ.col(i) = W.row(FreeVariablesIndex[i]);
 
-        Debug(WZ);
-
         // r=(g+theta*(x_cauchy-x)-W*(M*c));
-        Debug(g);
-        Debug(x_cauchy);
-        Debug(x);
         ukfVectorType rr = (g + theta * (x_cauchy - x) - W * (M * c));
         // r=r(FreeVariables);
         ukfVectorType r = ukfMatrixType::Zero(FreeVarCount, 1);
         for (int i = 0; i < FreeVarCount; i++)
             r.row(i) = rr.row(FreeVariablesIndex[i]);
-
-        Debug(r.transpose());
 
         // STEP 2: "v = w^T*Z*r" and STEP 3: "v = M*v"
         ukfVectorType v = M * (WZ * r);
@@ -618,7 +587,6 @@ public:
         // STEP: 6
         // HERE IS A MISTAKE IN THE ORIGINAL PAPER!
         ukfVectorType du = -theta_inverse * r - theta_inverse * theta_inverse * WZ.transpose() * v;
-        Debug(du.transpose());
         // STEP: 7
         double alpha_star = FindAlpha(x_cauchy, du, FreeVariablesIndex);
 
@@ -632,14 +600,27 @@ public:
         }
     }
 
+    bool isOptimal(ukfVectorType &x, ukfVectorType &g)
+    {
+        ukfVectorType projGrad = x - g;
+
+        for (int i = 0; i < x.size(); ++i)
+        {
+            if (projGrad(i) < lb(i))
+                projGrad(i) = lb(i);
+            else if (projGrad(i) > ub(i))
+                projGrad(i) = ub(i);
+        }
+
+        projGrad = projGrad - x;
+
+        return (projGrad.cwiseAbs()).maxCoeff() > tol;
+    }
+
     void Solve(ukfVectorType &x0)
     {
         Assert(x0.rows() == lb.rows(), "lower bound size incorrect");
         Assert(x0.rows() == ub.rows(), "upper bound size incorrect");
-
-        Debug(x0.transpose());
-        Debug(lb.transpose());
-        Debug(ub.transpose());
 
         Assert((x0.array() >= lb.array()).all(),
                "seed is not feasible (violates lower bound)");
@@ -658,28 +639,21 @@ public:
         int k = 0;
         double f = functionValue(x);
         functionGradient(x, g);
-        Debug(f);
-        Debug(g.transpose());
 
         theta = 1.0;
 
         W = ukfMatrixType::Zero(DIM, 1);
         M = ukfMatrixType::Zero(1, 1);
 
-        auto noConvergence =
-            [&](ukfVectorType &x1, ukfVectorType &x2) -> bool {
-            return (((x1 - x2).cwiseMax(lb).cwiseMin(ub) - x1).lpNorm<Eigen::Infinity>() >= tol);
-        };
-
-        while (noConvergence(x, g) && (k < maxIter) && (!isnan(f)))
+        while (isOptimal(x, g) && (k < maxIter))
         {
-            Debug("iteration " << k);
             double f_old = f;
             ukfVectorType x_old = x;
             ukfVectorType g_old = g;
 
             // STEP 2: compute the cauchy point by algorithm CP
-            ukfVectorType CauchyPoint = ukfMatrixType::Zero(DIM, 1), c = ukfMatrixType::Zero(DIM, 1);
+            ukfVectorType CauchyPoint = ukfMatrixType::Zero(DIM, 1);
+            ukfVectorType c = ukfMatrixType::Zero(DIM, 1);
             GetGeneralizedCauchyPoint(x, g, CauchyPoint, c);
             // STEP 3: compute a search direction d_k by the primal method
             ukfVectorType SubspaceMin;
@@ -698,43 +672,43 @@ public:
             ukfVectorType newS = x - x_old;
 
             // STEP 6:
-            double test = newS.dot(newY);
-            test = (test < 0) ? -1.0 * test : test;
+            double curvature = std::abs(newS.dot(newY));
 
-            if (test > EPS * newY.squaredNorm())
+            if (curvature < EPS)
             {
-                if (k < m)
-                {
-                    yHistory.conservativeResize(DIM, k + 1);
-                    sHistory.conservativeResize(DIM, k + 1);
-                }
-                else
-                {
-                    yHistory.leftCols(m - 1) = yHistory.rightCols(m - 1).eval();
-                    sHistory.leftCols(m - 1) = sHistory.rightCols(m - 1).eval();
-                }
-                yHistory.rightCols(1) = newY;
-                sHistory.rightCols(1) = newS;
-
-                // STEP 7:
-                theta = (double)(newY.transpose() * newY) / (newY.transpose() * newS);
-
-                W = ukfMatrixType::Zero(yHistory.rows(), yHistory.cols() + sHistory.cols());
-
-                W << yHistory, (theta * sHistory);
-
-                ukfMatrixType A = sHistory.transpose() * yHistory;
-                ukfMatrixType L = A.triangularView<Eigen::StrictlyLower>();
-                ukfMatrixType MM(A.rows() + L.rows(), A.rows() + L.cols());
-                ukfMatrixType D = -1 * A.diagonal().asDiagonal();
-                MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
-
-                M = MM.inverse();
+                k++;
+                continue;
             }
+            if (k < m)
+            {
+                yHistory.conservativeResize(DIM, k + 1);
+                sHistory.conservativeResize(DIM, k + 1);
+            }
+            else
+            {
+                yHistory.leftCols(m - 1) = yHistory.rightCols(m - 1).eval();
+                sHistory.leftCols(m - 1) = sHistory.rightCols(m - 1).eval();
+            }
+            yHistory.rightCols(1) = newY;
+            sHistory.rightCols(1) = newS;
+
+            // STEP 7:
+            theta = (double)(newY.transpose() * newY) / (newY.transpose() * newS);
+
+            W = ukfMatrixType::Zero(yHistory.rows(), yHistory.cols() + sHistory.cols());
+
+            W << yHistory, (theta * sHistory);
+
+            ukfMatrixType A = sHistory.transpose() * yHistory;
+            ukfMatrixType L = A.triangularView<Eigen::StrictlyLower>();
+            ukfMatrixType MM(A.rows() + L.rows(), A.rows() + L.cols());
+            ukfMatrixType D = -1 * A.diagonal().asDiagonal();
+            MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
+
+            M = MM.inverse();
 
             double diff = f_old - f;
 
-            Debug("--> " << std::abs(diff));
             if (std::abs(diff) < tol)
                 break; // successive function values too similar
             if (isnan(diff) || isinf(diff) || diff < 0)

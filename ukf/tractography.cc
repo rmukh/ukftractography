@@ -2307,7 +2307,6 @@ void Tractography::Follow3T(const int thread_id,
     if (!is_brain || in_csf || stepnr > _max_length // Stop if the fiber is too long
         || is_curving)
     {
-
       break;
     }
 
