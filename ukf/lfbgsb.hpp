@@ -29,7 +29,7 @@
  * (Byrd, Lu, Nocedal, Zhu)
  */
 /*
-   Redesigned, integrated, and improved by Rinat Mukhometzianov, 2019
+   Redesigned, improved, integrated  by Rinat Mukhometzianov, 2019
 */
 
 #ifndef LBFGSB_H_
@@ -67,7 +67,7 @@ public:
 
     ukfVectorType _fixed_params;
     ukfVectorType _signal;
-    const double EPS = 2.2204e-16;
+    const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
         : lb(l), ub(u), tol(1e-6), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast)
@@ -76,7 +76,7 @@ public:
         M = ukfMatrixType::Zero(0, 0);
     }
 
-    std::vector<int> sort_indexes(const std::vector<std::pair<int, double>> &v)
+    std::vector<int> sort_indexes(const std::vector<std::pair<int, ukfPrecisionType>> &v)
     {
         std::vector<int> idx(v.size());
         for (size_t i = 0; i != idx.size(); ++i)
@@ -188,9 +188,9 @@ public:
         err = sum / norm_sq_signal;
     }
 
-    double functionValue(const ukfVectorType &x)
+    ukfPrecisionType functionValue(const ukfVectorType &x)
     {
-        double residual = 0.0;
+        ukfPrecisionType residual = 0.0;
 
         // Convert the parameter to the ukfMtarixType
         ukfVectorType localState(x.size() + _fixed_params.size());
@@ -294,19 +294,19 @@ public:
         for (unsigned int it = 0; it < x_size; ++it)
         {
             // // Optimal h is sqrt(epsilon machine) * x
-            // double h;
+            // ukfPrecisionType h;
             // if (x(it) == 0)
             //     h = std::sqrt(EPS);
             // else
             //     h = std::sqrt(EPS) * x(it);
 
-            // //double h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
+            // //ukfPrecisionType h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
 
             // // Volatile, otherwise compiler will optimize the value for dx
-            // volatile double xph = x(it) + h;
+            // volatile ukfPrecisionType xph = x(it) + h;
 
             // // For taking into account the rounding error
-            // double dx = xph - x(it);
+            // ukfPrecisionType dx = xph - x(it);
 
             // // Compute the slope
             // p_h(it) = xph;
@@ -316,30 +316,30 @@ public:
 
             // Estimating derivatives using Richardson's Extrapolation
 
-            //double h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
-            double h = 0.001;
+            //ukfPrecisionType h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
+            ukfPrecisionType h = 0.001;
             // Compute d/dx[func(*first)] using a three-point
             // central difference rule of O(dx^6).
 
-            const double dx1 = h;
-            const double dx2 = dx1 * 2;
-            const double dx3 = dx1 * 3;
+            const ukfPrecisionType dx1 = h;
+            const ukfPrecisionType dx2 = dx1 * 2;
+            const ukfPrecisionType dx3 = dx1 * 3;
 
             p_h(it) = x(it) + dx1;
             p_hh(it) = x(it) - dx1;
-            const double m1 = (functionValue(p_h) - functionValue(p_hh)) / 2;
+            const ukfPrecisionType m1 = (functionValue(p_h) - functionValue(p_hh)) / 2;
 
             p_h(it) = x(it) + dx2;
             p_hh(it) = x(it) - dx2;
-            const double m2 = (functionValue(p_h) - functionValue(p_hh)) / 4;
+            const ukfPrecisionType m2 = (functionValue(p_h) - functionValue(p_hh)) / 4;
 
             p_h(it) = x(it) + dx3;
             p_hh(it) = x(it) - dx3;
-            const double m3 = (functionValue(p_h) - functionValue(p_hh)) / 6;
+            const ukfPrecisionType m3 = (functionValue(p_h) - functionValue(p_hh)) / 6;
 
-            const double fifteen_m1 = 15 * m1;
-            const double six_m2 = 6 * m2;
-            const double ten_dx1 = 10 * dx1;
+            const ukfPrecisionType fifteen_m1 = 15 * m1;
+            const ukfPrecisionType six_m2 = 6 * m2;
+            const ukfPrecisionType ten_dx1 = 10 * dx1;
 
             grad(it) = ((fifteen_m1 - six_m2) + m3) / ten_dx1;
 
@@ -366,7 +366,7 @@ public:
     }
 
     // Find cauchy point in x
-    // <parameter name="x">start in x</parameter>
+    // start in x
     void GetGeneralizedCauchyPoint(ukfVectorType &x, ukfVectorType &g, ukfVectorType &x_cauchy, ukfVectorType &c)
     {
         const int DIM = x.rows();
@@ -375,7 +375,7 @@ public:
         // Given x,l,u,g, and B = \theta I-WMW
 
         // {all t_i} = { (idx,value), ... }
-        std::vector<std::pair<int, double>> SetOfT;
+        std::vector<std::pair<int, ukfPrecisionType>> SetOfT;
         // the feasible set is implicitly given by "SetOfT - {t_i==0}"
         ukfVectorType d = -g;
 
@@ -385,7 +385,7 @@ public:
         // n operations
         for (int j = 0; j < DIM; j++)
         {
-            double tmp = 0.0;
+            ukfPrecisionType tmp = 0.0;
 
             if (g(j) == 0.0)
             {
@@ -418,14 +418,14 @@ public:
         // c := 	0
         c = ukfMatrixType::Zero(M.rows(), 1);
         // f' := 	g^T*d = -d^Td
-        double f_prime = -d.dot(d); // (n operations)
+        ukfPrecisionType f_prime = -d.dot(d); // (n operations)
         // f'' :=	\theta*d^T*d-d^T*W*M*W^T*d = -\theta*f' - p^T*M*p
-        double f_doubleprime = -theta * f_prime - p.dot(M * p); // (O(m^2) operations)
-        double f_primezero = -theta * f_prime;
+        ukfPrecisionType f_doubleprime = -theta * f_prime - p.dot(M * p); // (O(m^2) operations)
+        ukfPrecisionType f_primezero = -theta * f_prime;
         // \delta t_min :=	-f'/f''
-        double dt_min = -f_prime / f_doubleprime;
+        ukfPrecisionType dt_min = -f_prime / f_doubleprime;
         // t_old := 	0
-        double t_old = 0;
+        ukfPrecisionType t_old = 0;
         // b := 	argmin {t_i , t_i >0}
 
         int i = 0;
@@ -436,22 +436,22 @@ public:
         //         break;
         // }
         std::cout << "\nSetOfT ";
-        for (auto i : SetOfT)
-            std::cout << i.second << " ";
+        for (auto v : SetOfT)
+            std::cout << v.second << " ";
 
         std::cout << "\nSortedIndices ";
-        for (auto i : SortedIndices)
-            std::cout << i << " ";
+        for (auto v : SortedIndices)
+            std::cout << v << " ";
 
         std::cout << std::endl;
         int b = SortedIndices[0];
         std::cout << "b " << b << std::endl;
         // see below
         // t        			:= 	min{t_i : i in F}
-        double t = SetOfT[b].second;
+        ukfPrecisionType t = SetOfT[b].second;
         std::cout << "t " << t << std::endl;
         // \delta t 			:= 	t - 0
-        double dt = t - t_old;
+        ukfPrecisionType dt = t - t_old;
 
         // examination of subsequent segments
         while ((dt_min > dt) && (i < DIM))
@@ -462,10 +462,10 @@ public:
                 x_cauchy(b) = lb(b);
 
             // z_b = x_p^{cp} - x_b
-            double zb = x_cauchy(b) - x(b);
+            ukfPrecisionType zb = x_cauchy(b) - x(b);
             // c   :=  c +\delta t*p
             c += dt * p;
-            double gb = g(b);
+            ukfPrecisionType gb = g(b);
             // cache
             ukfVectorType wbt = W.row(b);
 
@@ -497,16 +497,16 @@ public:
     }
 
     // find valid alpha for (8.5)
-    // <parameter name="x_cp">cauchy point</parameter>
-    // <parameter name="du">unconstrained solution of subspace minimization</parameter>
-    // <parameter name="FreeVariables">flag (1 if is free variable and 0 if is not free variable)</parameter>
-    double FindAlpha(ukfVectorType &x_cp, ukfVectorType &du, std::vector<int> &FreeVariables)
+    // x_cp cauchy point
+    // du unconstrained solution of subspace minimization
+    // FreeVariables flag (1 if is free variable and 0 if is not free variable)
+    ukfPrecisionType FindAlpha(ukfVectorType &x_cp, ukfVectorType &du, std::vector<int> &FreeVariables)
     {
         /* 
          * this returns
 		 * a* = max {a : a <= 1 and  l_i-xc_i <= a*d_i <= u_i-xc_i}
 		 */
-        double alphastar = 1;
+        ukfPrecisionType alphastar = 1;
         const unsigned int n = FreeVariables.size();
         for (unsigned int i = 0; i < n; i++)
         {
@@ -518,38 +518,136 @@ public:
         return alphastar;
     }
 
-    // using linesearch to determine step width
-    // <parameter name="x">start in x</parameter>
-    // <parameter name="dx">direction</parameter>
-    // <parameter name="f">current value of objective (will be changed)</parameter>
-    // <parameter name="g">current gradient of objective (will be changed)</parameter>
-    // <parameter name="t">step width (will be changed)</parameter>
-    void LineSearch(ukfVectorType &x, ukfVectorType dx, double &f, ukfVectorType &g, double &t)
+    ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
     {
-        const double f_in = f;
-        const ukfVectorType g_in = g;
+        ukfPrecisionType c1 = 1e-4;
+        ukfPrecisionType c2 = 0.9;
+        unsigned i = 0;
+        unsigned max_iter = 20;
+        ukfPrecisionType dphi0 = g0.transpose() * p;
+        ukfPrecisionType dphi = 0.0;
+        ukfPrecisionType alpha = 0.0;
+        ukfPrecisionType alpha_i = 0.0;
+        ukfPrecisionType f_i = 0.0;
+        ukfPrecisionType f_lo = 0.0;
+        ukfVectorType x;
+        ukfVectorType x_lo;
+        ukfVectorType g_i;
 
-        const double Cache = 0.2 * g_in.dot(dx);
-
-        t = 0.1;
-        f = functionValue(x + t * dx);
-
-        while (f > f_in + t * Cache)
+        while (true)
         {
-            t *= 0.8;
-            f = functionValue(x + t * dx);
-        }
+            alpha_i = 0.5 * (alpha_lo + alpha_hi);
+            alpha = alpha_i;
+            x = x0 + alpha_i * p;
+            f_i = functionValue(x);
+            functionGradient(x, g_i);
+            x_lo = x0 + alpha_lo * p;
+            f_lo = functionValue(x_lo);
+            if (f_i > f0 + c1 * alpha_i * dphi0 || f_i >= f_lo)
+            {
+                alpha_hi = alpha_i;
+            }
+            else
+            {
+                dphi = g_i.transpose() * p;
+                if (std::abs(dphi) <= -c2 * dphi0)
+                {
+                    alpha = alpha_i;
+                    break;
+                }
+                if (dphi * (alpha_hi - alpha_lo) >= 0)
+                    alpha_hi = alpha_lo;
 
+                alpha_lo = alpha_i;
+            }
+            i++;
+            if (i > max_iter)
+            {
+                alpha = alpha_i;
+                break;
+            }
+        }
+        return alpha;
+    }
+
+    ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, ukfVectorType &p)
+    {
+        // Init all necessary variables
+        ukfPrecisionType c1 = 1e-4;
+        ukfPrecisionType c2 = 0.9;
+        ukfPrecisionType alpha = 1.0;
+        ukfPrecisionType alpha_max = 2.5;
+        ukfPrecisionType alpha_im1 = 0.0;
+        ukfPrecisionType alpha_i = 1.0;
+        ukfPrecisionType f_im1 = f0;
+        ukfPrecisionType f_i = 0;
+        ukfPrecisionType dphi0 = g0.transpose() * p;
+        ukfPrecisionType dphi = 0.0;
+        unsigned i = 0;
+        unsigned max_iter = 20;
+        ukfVectorType x;
+        ukfVectorType g_i;
+
+        // Perfome search for the alpha value which satisfy strong Wolfe conditions
+        while (true)
+        {
+            x = x0 + alpha_i * p;
+            f_i = functionValue(x);
+            functionGradient(x, g_i);
+            if ((f_i > f0 + c1 * dphi0) || ((i > 1) && (f_i >= f_im1)))
+            {
+                alpha = zoomAlpha(x0, f0, g0, p, alpha_im1, alpha_i);
+                break;
+            }
+
+            dphi = g_i.transpose() * p;
+            if (std::abs(dphi) <= -c2 * dphi0)
+            {
+                alpha = alpha_i;
+                break;
+            }
+            if (dphi >= 0)
+            {
+                alpha = zoomAlpha(x0, f0, g0, p, alpha_i, alpha_im1);
+                break;
+            }
+
+            // update
+            alpha_im1 = alpha_i;
+            f_im1 = f_i;
+            alpha_i = alpha_i + 0.8 * (alpha_max - alpha_i);
+
+            if (i > max_iter)
+            {
+                alpha = alpha_i;
+                break;
+            }
+
+            i++;
+        }
+        return alpha;
+    }
+
+    // Using linesearch to determine step width
+    // x start in x
+    // dx direction
+    // f current value of objective (will be changed)
+    // f current gradient of objective (will be changed)
+    // t step width (will be changed)
+    void LineSearch(ukfVectorType &x, ukfVectorType dx, ukfPrecisionType &f, ukfVectorType &g, ukfPrecisionType &t)
+    {
+        ukfPrecisionType alpha = 1.0;
+        alpha = strongWolfeConditions(x, f, g, dx);
+        x += alpha * dx;
         functionGradient(x + t * dx, g);
-        x += t * dx;
     }
 
     // direct primal approach
-    // <parameter name="x">start in x</parameter>
+    // x start in x
     void SubspaceMinimization(ukfVectorType &x_cauchy, ukfVectorType &x, ukfVectorType &c, ukfVectorType &g, ukfVectorType &SubspaceMin)
     {
         // cached value: ThetaInverse=1/theta;
-        double theta_inverse = 1.0 / theta;
+        ukfPrecisionType theta_inverse = 1.0 / theta;
 
         // size of "t"
         std::vector<int> FreeVariablesIndex;
@@ -588,7 +686,7 @@ public:
         // HERE IS A MISTAKE IN THE ORIGINAL PAPER!
         ukfVectorType du = -theta_inverse * r - theta_inverse * theta_inverse * WZ.transpose() * v;
         // STEP: 7
-        double alpha_star = FindAlpha(x_cauchy, du, FreeVariablesIndex);
+        ukfPrecisionType alpha_star = FindAlpha(x_cauchy, du, FreeVariablesIndex);
 
         // STEP: 8
         ukfVectorType dStar = alpha_star * du;
@@ -637,7 +735,7 @@ public:
         ukfVectorType x = x0, g;
 
         int k = 0;
-        double f = functionValue(x);
+        ukfPrecisionType f = functionValue(x);
         functionGradient(x, g);
 
         theta = 1.0;
@@ -647,7 +745,7 @@ public:
 
         while (isOptimal(x, g) && (k < maxIter))
         {
-            double f_old = f;
+            ukfPrecisionType f_old = f;
             ukfVectorType x_old = x;
             ukfVectorType g_old = g;
 
@@ -660,7 +758,7 @@ public:
             SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
 
             ukfMatrixType H;
-            double Length = 0;
+            ukfPrecisionType Length = 0;
 
             // STEP 4: perform linesearch and STEP 5: compute gradient
             LineSearch(x, SubspaceMin - x, f, g, Length);
@@ -672,7 +770,7 @@ public:
             ukfVectorType newS = x - x_old;
 
             // STEP 6:
-            double curvature = std::abs(newS.dot(newY));
+            ukfPrecisionType curvature = std::abs(newS.dot(newY));
 
             if (curvature < EPS)
             {
@@ -693,7 +791,7 @@ public:
             sHistory.rightCols(1) = newS;
 
             // STEP 7:
-            theta = (double)(newY.transpose() * newY) / (newY.transpose() * newS);
+            theta = (ukfPrecisionType)(newY.transpose() * newY) / (newY.transpose() * newS);
 
             W = ukfMatrixType::Zero(yHistory.rows(), yHistory.cols() + sHistory.cols());
 
@@ -707,7 +805,7 @@ public:
 
             M = MM.inverse();
 
-            double diff = f_old - f;
+            ukfPrecisionType diff = f_old - f;
 
             if (std::abs(diff) < tol)
                 break; // successive function values too similar
@@ -724,10 +822,10 @@ public:
     }
 
 private:
-    double tol;
+    ukfPrecisionType tol;
     int maxIter;
     int m;
-    double theta;
+    ukfPrecisionType theta;
     const stdVec_t &gradients;
     const ukfVectorType &b_vals;
     const mat33_t &m_D_iso;
