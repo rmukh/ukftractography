@@ -70,7 +70,7 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-6), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast)
+        : lb(l), ub(u), tol(1e-6), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
     {
         W = ukfMatrixType::Zero(l.rows(), 0);
         M = ukfMatrixType::Zero(0, 0);
@@ -291,7 +291,7 @@ public:
         p_hh = x;
 
         // Calculate derivative for each parameter (reference to the wikipedia page: Numerical Differentiation)
-        for (unsigned int it = 0; it < x_size; ++it)
+        for (unsigned it = 0; it < x_size; ++it)
         {
             // // Optimal h is sqrt(epsilon machine) * x
             // ukfPrecisionType h;
@@ -343,21 +343,6 @@ public:
 
             grad(it) = ((fifteen_m1 - six_m2) + m3) / ten_dx1;
 
-            if (isnan(grad(it)))
-            {
-                cout << "it " << it << endl;
-                cout << "x(it) " << x(it) << endl;
-                cout << "grad(it) " << grad(it) << endl;
-                cout << "h " << h << endl;
-                //cout << "xph " << xph << endl;
-                //cout << "dx " << dx << endl;
-                cout << "p_h " << p_h.transpose() << endl;
-                cout << "p_hh " << p_hh.transpose() << endl;
-                cout << "diff " << functionValue(p_h) - functionValue(p_hh) << endl;
-                cout << "functionValue(p_h) " << functionValue(p_h) << endl;
-                cout << "functionValue(p_hh) " << functionValue(p_hh) << endl;
-            }
-
             // Set parameters back for next iteration
             p_h(it) = x(it);
             p_hh(it) = x(it);
@@ -379,10 +364,6 @@ public:
         // the feasible set is implicitly given by "SetOfT - {t_i==0}"
         ukfVectorType d = -g;
 
-        std::cout << "g " << g.transpose() << std::endl; //fix this!
-        std::cout << "x " << x.transpose() << std::endl;
-
-        // n operations
         for (int j = 0; j < DIM; j++)
         {
             ukfPrecisionType tmp = 0.0;
@@ -405,13 +386,6 @@ public:
                 d(j) = 0.0;
         }
 
-        std::cout << "d " << d.transpose() << std::endl;
-
-        // paper: using heapsort
-        // sortedindices [1,0,2] means the minimal element is on the 1th entry
-        std::vector<int> SortedIndices = sort_indexes(SetOfT);
-
-        x_cauchy = x;
         // Initialize
         // p := 	W^T*p
         ukfVectorType p = (W.transpose() * d); // (2mn operations)
@@ -420,63 +394,62 @@ public:
         // f' := 	g^T*d = -d^Td
         ukfPrecisionType f_prime = -d.dot(d); // (n operations)
         // f'' :=	\theta*d^T*d-d^T*W*M*W^T*d = -\theta*f' - p^T*M*p
-        ukfPrecisionType f_doubleprime = -theta * f_prime - p.dot(M * p); // (O(m^2) operations)
+        ukfPrecisionType f_doubleprime = -theta * f_prime - p.transpose() * M * p; // (O(m^2) operations)
         ukfPrecisionType f_primezero = -theta * f_prime;
         // \delta t_min :=	-f'/f''
         ukfPrecisionType dt_min = -f_prime / f_doubleprime;
         // t_old := 	0
         ukfPrecisionType t_old = 0;
-        // b := 	argmin {t_i , t_i >0}
 
-        int i = 0;
-        // for (int j = 0; j < DIM; j++)
-        // {
-        //     i = j;
-        //     if (SetOfT[SortedIndices[j]].second > 0)
-        //         break;
-        // }
-        std::cout << "\nSetOfT ";
-        for (auto v : SetOfT)
-            std::cout << v.second << " ";
+        // sortedindices [1,0,2] means the minimal element is on the 1th entry
+        std::vector<int> SortedIndices = sort_indexes(SetOfT); // using heapsort
 
-        std::cout << "\nSortedIndices ";
-        for (auto v : SortedIndices)
-            std::cout << v << " ";
-
-        std::cout << std::endl;
+        // b := i s.t t_i = t
         int b = SortedIndices[0];
-        std::cout << "b " << b << std::endl;
-        // see below
-        // t        			:= 	min{t_i : i in F}
+        // t := min{ti : i in F}
         ukfPrecisionType t = SetOfT[b].second;
-        std::cout << "t " << t << std::endl;
-        // \delta t 			:= 	t - 0
-        ukfPrecisionType dt = t - t_old;
+        
+        //std::cout << "\nSetOfT ";
+        //for (auto v : SetOfT)
+        //    std::cout << v.second << " ";
+
+        //std::cout << "\nSortedIndices ";
+        //for (auto v : SortedIndices)
+        //    std::cout << v << " ";
+
+        // \delta t := 	t - 0
+        ukfPrecisionType dt = t - 0;
+        int i = 0;
+
+        std::cout << "d " << d.transpose() << std::endl;
 
         // examination of subsequent segments
-        while ((dt_min > dt) && (i < DIM))
+        while (dt_min >= dt)
         {
+            std::cout << "dt " << dt << " dt_min " << dt_min << std::endl;
+            
             if (d(b) > 0)
                 x_cauchy(b) = ub(b);
             else if (d(b) < 0)
                 x_cauchy(b) = lb(b);
 
-            // z_b = x_p^{cp} - x_b
+            // z_b := x_p^{cp} - x_b
             ukfPrecisionType zb = x_cauchy(b) - x(b);
-            // c   :=  c +\delta t*p
+            // c :=  c +\delta t*p
             c += dt * p;
-            ukfPrecisionType gb = g(b);
-            // cache
+            
             ukfVectorType wbt = W.row(b);
+            ukfPrecisionType gb = g(b);
 
-            f_prime += dt * f_doubleprime + gb * gb + theta * gb * zb - gb * wbt.transpose() * (M * c);
-            f_doubleprime -= theta * gb * gb - 2.0 * (gb * (wbt.dot(M * p))) - gb * gb * wbt.transpose() * (M * wbt);
+            f_prime += dt * f_doubleprime + gb * gb + theta * gb * zb - gb * wbt.transpose() * M * c;
+            f_doubleprime -= theta * gb * gb - 2.0 * gb * wbt.transpose() * M * p - gb * gb * wbt.transpose() * M * wbt;
             f_doubleprime = std::max(EPS * f_primezero, f_doubleprime);
-            p += gb * wbt.transpose();
+            
+            p += gb * wbt;
             d(b) = 0;
             dt_min = -f_prime / f_doubleprime;
             t_old = t;
-            ++i;
+            i++;
             if (i < DIM)
             {
                 b = SortedIndices[i];
@@ -524,7 +497,7 @@ public:
         ukfPrecisionType c2 = 0.9;
         unsigned i = 0;
         unsigned max_iter = 20;
-        ukfPrecisionType dphi0 = g0.transpose() * p;
+        ukfPrecisionType dphi0 = g0.dot(p);
         ukfPrecisionType dphi = 0.0;
         ukfPrecisionType alpha = 0.0;
         ukfPrecisionType alpha_i = 0.0;
@@ -549,7 +522,7 @@ public:
             }
             else
             {
-                dphi = g_i.transpose() * p;
+                dphi = g_i.dot(p);
                 if (std::abs(dphi) <= -c2 * dphi0)
                 {
                     alpha = alpha_i;
@@ -581,7 +554,7 @@ public:
         ukfPrecisionType alpha_i = 1.0;
         ukfPrecisionType f_im1 = f0;
         ukfPrecisionType f_i = 0;
-        ukfPrecisionType dphi0 = g0.transpose() * p;
+        ukfPrecisionType dphi0 = g0.dot(p);
         ukfPrecisionType dphi = 0.0;
         unsigned i = 0;
         unsigned max_iter = 20;
@@ -600,7 +573,7 @@ public:
                 break;
             }
 
-            dphi = g_i.transpose() * p;
+            dphi = g_i.dot(p);
             if (std::abs(dphi) <= -c2 * dphi0)
             {
                 alpha = alpha_i;
@@ -634,18 +607,21 @@ public:
     // f current value of objective (will be changed)
     // f current gradient of objective (will be changed)
     // t step width (will be changed)
-    void LineSearch(ukfVectorType &x, ukfVectorType dx, ukfPrecisionType &f, ukfVectorType &g, ukfPrecisionType &t)
+    void LineSearch(ukfVectorType &x, ukfVectorType dx, ukfPrecisionType &f, ukfVectorType &g)
     {
         ukfPrecisionType alpha = 1.0;
-        alpha = strongWolfeConditions(x, f, g, dx);
+        if (line_search_flag)
+            alpha = strongWolfeConditions(x, f, g, dx);
         x += alpha * dx;
-        functionGradient(x + t * dx, g);
+        functionGradient(x, g);
     }
 
     // direct primal approach
     // x start in x
     void SubspaceMinimization(ukfVectorType &x_cauchy, ukfVectorType &x, ukfVectorType &c, ukfVectorType &g, ukfVectorType &SubspaceMin)
     {
+        line_search_flag = true;
+
         // cached value: ThetaInverse=1/theta;
         ukfPrecisionType theta_inverse = 1.0 / theta;
 
@@ -661,13 +637,19 @@ public:
         }
         const int FreeVarCount = FreeVariablesIndex.size();
 
+        if (FreeVarCount == 0)
+        {
+            line_search_flag = false;
+            return;
+        }
+
         ukfMatrixType WZ = ukfMatrixType::Zero(W.cols(), FreeVarCount);
 
         for (int i = 0; i < FreeVarCount; i++)
             WZ.col(i) = W.row(FreeVariablesIndex[i]);
 
         // r=(g+theta*(x_cauchy-x)-W*(M*c));
-        ukfVectorType rr = (g + theta * (x_cauchy - x) - W * (M * c));
+        ukfVectorType rr = g + theta * (x_cauchy - x) - W * (M * c);
         // r=r(FreeVariables);
         ukfVectorType r = ukfMatrixType::Zero(FreeVarCount, 1);
         for (int i = 0; i < FreeVarCount; i++)
@@ -720,10 +702,8 @@ public:
         Assert(x0.rows() == lb.rows(), "lower bound size incorrect");
         Assert(x0.rows() == ub.rows(), "upper bound size incorrect");
 
-        Assert((x0.array() >= lb.array()).all(),
-               "seed is not feasible (violates lower bound)");
-        Assert((x0.array() <= ub.array()).all(),
-               "seed is not feasible (violates upper bound)");
+        Assert((x0.array() >= lb.array()).all(), "seed is not feasible (violates lower bound)");
+        Assert((x0.array() <= ub.array()).all(), "seed is not feasible (violates upper bound)");
 
         const int DIM = x0.rows();
 
@@ -734,12 +714,13 @@ public:
 
         ukfVectorType x = x0, g;
 
-        int k = 0;
         ukfPrecisionType f = functionValue(x);
         functionGradient(x, g);
 
-        theta = 1.0;
+        std::cout << "gradient " << g << std::endl;
 
+        int k = 0;
+        theta = 1.0;
         W = ukfMatrixType::Zero(DIM, 1);
         M = ukfMatrixType::Zero(1, 1);
 
@@ -758,10 +739,9 @@ public:
             SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
 
             ukfMatrixType H;
-            ukfPrecisionType Length = 0;
 
             // STEP 4: perform linesearch and STEP 5: compute gradient
-            LineSearch(x, SubspaceMin - x, f, g, Length);
+            LineSearch(x, SubspaceMin - x, f, g);
 
             xHistory.push_back(x);
 
@@ -791,7 +771,7 @@ public:
             sHistory.rightCols(1) = newS;
 
             // STEP 7:
-            theta = (ukfPrecisionType)(newY.transpose() * newY) / (newY.transpose() * newS);
+            theta = (ukfPrecisionType)(newY.dot(newY)) / (newY.dot(newS));
 
             W = ukfMatrixType::Zero(yHistory.rows(), yHistory.cols() + sHistory.cols());
 
@@ -809,16 +789,11 @@ public:
 
             if (std::abs(diff) < tol)
                 break; // successive function values too similar
-            if (isnan(diff) || isinf(diff) || diff < 0)
-            {
-                x = x_old;
-                break;
-            }
+
             k++;
         }
 
         XOpt = x;
-        x0 = x;
     }
 
 private:
@@ -830,6 +805,7 @@ private:
     const ukfVectorType &b_vals;
     const mat33_t &m_D_iso;
     ukfPrecisionType _w_fast_diffusion;
+    bool line_search_flag;
 };
 
 #endif /* LBFGSB_H_ */
