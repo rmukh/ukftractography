@@ -180,9 +180,9 @@ public:
 
         for (unsigned int i = 0; i < N; ++i)
         {
-            ukfPrecisionType diff = signal(i) - signal_estimate(i);
+            ukfPrecisionType diff = signal[i] - signal_estimate(i, 0);
             sum += diff * diff;
-            norm_sq_signal += signal(i) * signal(i);
+            norm_sq_signal += signal[i] * signal[i];
         }
 
         err = sum / norm_sq_signal;
@@ -289,7 +289,7 @@ public:
         // Set parameters
         p_h = x;
         p_hh = x;
-
+        /*
         // Calculate derivative for each parameter (reference to the wikipedia page: Numerical Differentiation)
         for (unsigned it = 0; it < x_size; ++it)
         {
@@ -347,7 +347,29 @@ public:
             p_h(it) = x(it);
             p_hh(it) = x(it);
         }
-        //vector version
+        */
+        //original version
+        for (unsigned it = 0; it < x_size; ++it)
+        {
+            // Optimal h is sqrt(epsilon machine) * x
+            double h = std::sqrt(2.2204e-16) * std::max(std::abs(x(it)), 1e-7);
+
+            // Volatile, otherwise compiler will optimize the value for dx
+            volatile double xph = x(it) + h;
+
+            // For taking into account the rounding error
+            double dx = xph - x(it);
+
+            // Compute the slope
+            p_h[it] = xph;
+
+            //p_hh[it] = parameters[it] - h;
+            grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
+
+            // Set parameters back for next iteration
+            p_h(it) = x(it);
+            p_hh(it) = x(it);
+        }
     }
 
     // Find cauchy point in x
@@ -397,6 +419,9 @@ public:
         ukfPrecisionType f_doubleprime = -theta * f_prime - p.transpose() * M * p; // (O(m^2) operations)
         ukfPrecisionType f_primezero = -theta * f_prime;
         // \delta t_min :=	-f'/f''
+        std::cout << "p " << p << std::endl;
+        std::cout << "M " << M << std::endl;
+        std::cout <<" f_prime " << f_prime << " f_doubleprime " << f_doubleprime << std::endl;
         ukfPrecisionType dt_min = -f_prime / f_doubleprime;
         // t_old := 	0
         ukfPrecisionType t_old = 0;
@@ -408,7 +433,7 @@ public:
         int b = SortedIndices[0];
         // t := min{ti : i in F}
         ukfPrecisionType t = SetOfT[b].second;
-        
+
         //std::cout << "\nSetOfT ";
         //for (auto v : SetOfT)
         //    std::cout << v.second << " ";
@@ -418,16 +443,12 @@ public:
         //    std::cout << v << " ";
 
         // \delta t := 	t - 0
-        ukfPrecisionType dt = t - 0;
+        ukfPrecisionType dt = t - t_old;
         int i = 0;
-
-        std::cout << "d " << d.transpose() << std::endl;
 
         // examination of subsequent segments
         while (dt_min >= dt)
         {
-            std::cout << "dt " << dt << " dt_min " << dt_min << std::endl;
-            
             if (d(b) > 0)
                 x_cauchy(b) = ub(b);
             else if (d(b) < 0)
@@ -437,14 +458,18 @@ public:
             ukfPrecisionType zb = x_cauchy(b) - x(b);
             // c :=  c +\delta t*p
             c += dt * p;
-            
+
             ukfVectorType wbt = W.row(b);
+            std::cout << "wbt " << wbt.rows() << " " << wbt.cols() << std::endl;
+            if (wbt.rows() !=1)
+                exit(0);
+
             ukfPrecisionType gb = g(b);
 
             f_prime += dt * f_doubleprime + gb * gb + theta * gb * zb - gb * wbt.transpose() * M * c;
             f_doubleprime -= theta * gb * gb - 2.0 * gb * wbt.transpose() * M * p - gb * gb * wbt.transpose() * M * wbt;
             f_doubleprime = std::max(EPS * f_primezero, f_doubleprime);
-            
+
             p += gb * wbt;
             d(b) = 0;
             dt_min = -f_prime / f_doubleprime;
@@ -613,11 +638,9 @@ public:
         if (line_search_flag)
             alpha = strongWolfeConditions(x, f, g, dx);
         x += alpha * dx;
-        functionGradient(x, g);
     }
 
     // direct primal approach
-    // x start in x
     void SubspaceMinimization(ukfVectorType &x_cauchy, ukfVectorType &x, ukfVectorType &c, ukfVectorType &g, ukfVectorType &SubspaceMin)
     {
         line_search_flag = true;
@@ -628,7 +651,7 @@ public:
         // size of "t"
         std::vector<int> FreeVariablesIndex;
 
-        for (int i = 0; i < x_cauchy.rows(); i++)
+        for (int i = 0; i < x_cauchy.rows(); ++i)
         {
             if ((x_cauchy(i) != ub(i)) && (x_cauchy(i) != lb(i)))
             {
@@ -643,9 +666,11 @@ public:
             return;
         }
 
+        // Probably rewrite as in the paper
+
         ukfMatrixType WZ = ukfMatrixType::Zero(W.cols(), FreeVarCount);
 
-        for (int i = 0; i < FreeVarCount; i++)
+        for (int i = 0; i < FreeVarCount; ++i)
             WZ.col(i) = W.row(FreeVariablesIndex[i]);
 
         // r=(g+theta*(x_cauchy-x)-W*(M*c));
@@ -717,8 +742,6 @@ public:
         ukfPrecisionType f = functionValue(x);
         functionGradient(x, g);
 
-        std::cout << "gradient " << g << std::endl;
-
         int k = 0;
         theta = 1.0;
         W = ukfMatrixType::Zero(DIM, 1);
@@ -740,8 +763,11 @@ public:
 
             ukfMatrixType H;
 
-            // STEP 4: perform linesearch and STEP 5: compute gradient
+            // STEP 4: perform linesearch
             LineSearch(x, SubspaceMin - x, f, g);
+
+            // STEP 5: compute gradient of the function
+            functionGradient(x, g);
 
             xHistory.push_back(x);
 
@@ -785,6 +811,7 @@ public:
 
             M = MM.inverse();
 
+            // Check if sequenced function value does not improve significantly on that step
             ukfPrecisionType diff = f_old - f;
 
             if (std::abs(diff) < tol)
