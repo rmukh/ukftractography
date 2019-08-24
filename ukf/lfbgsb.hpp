@@ -68,7 +68,7 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-6), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
+        : lb(l), ub(u), tol(1e-10), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
     {
         W = ukfMatrixType::Zero(l.rows(), 0);
         M = ukfMatrixType::Zero(0, 0);
@@ -547,7 +547,7 @@ public:
             alpha = alpha_i;
             x = x0 + alpha_i * p;
             f_i = functionValue(x);
-            
+
             functionGradient(x, g_i);
             x_lo = x0 + alpha_lo * p;
             f_lo = functionValue(x_lo);
@@ -755,6 +755,7 @@ public:
 
         while (isOptimal(x, g) && (k < maxIter))
         {
+            double f_old = f;
             ukfVectorType x_old = x;
             ukfVectorType g_old = g;
 
@@ -770,13 +771,11 @@ public:
             ukfMatrixType H;
 
             // STEP 4: perform linesearch
-            std::cout << "k " << k;
             LineSearch(x, SubspaceMin - x, f, g);
-            
+
             // STEP 5: compute gradient of the function
             f = functionValue(x);
             functionGradient(x, g);
-            std::cout << " g " << g.transpose() << std::endl;
 
             // prepare for next iteration
             ukfVectorType newY = g - g_old;
@@ -788,7 +787,6 @@ public:
             if (skipping < EPS)
             {
                 k++;
-                std::cout << "skipped on " << k << std::endl;
                 continue;
             }
             if (k < m)
@@ -815,6 +813,9 @@ public:
             ukfMatrixType D = -1 * A.diagonal().asDiagonal();
             MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
             M = MM.inverse();
+
+            if (std::abs(f_old - f) < tol)
+                break;
 
             k++;
         }

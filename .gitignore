@@ -36,3 +36,5 @@ settings.json
 /.vs
 
 CMakeSettings.json
+
+examples/log.txt

@@ -1060,10 +1060,11 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     //mtx.Lock();
     //NonLinearLeastSquareOptimization(thread_id, state, signal_values, _model);
     //mtx.Unlock();
-    ukfVectorType lowerBound = ukfVectorType::Ones(100) * -10;
-    ukfVectorType upperBound = ukfVectorType::Ones(100) * 10;
-    ukfVectorType state_temp = ukfVectorType::Ones(100) * 5;
-
+    ukfVectorType lowerBound = ukfVectorType::Ones(2) * -0.01;
+    ukfVectorType upperBound = ukfVectorType::Ones(2) * 0.5;
+    ukfVectorType state_temp(2);
+    state_temp(0) = -1.0;
+    state_temp(1) = 2.0;
     ukfVectorType fixed_params(2); 
     fixed_params(0) = 1;
     fixed_params(1) = 1;
