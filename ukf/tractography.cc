@@ -1060,11 +1060,10 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     //mtx.Lock();
     //NonLinearLeastSquareOptimization(thread_id, state, signal_values, _model);
     //mtx.Unlock();
-    ukfVectorType lowerBound = ukfVectorType::Ones(2) * -15;
-    ukfVectorType upperBound = ukfVectorType::Ones(2) * 20;
-    ukfVectorType state_temp(2);
-    state_temp(0) = -1.0;
-    state_temp(1) = 2.0;
+    ukfVectorType lowerBound = ukfVectorType::Ones(100) * -10;
+    ukfVectorType upperBound = ukfVectorType::Ones(100) * 10;
+    ukfVectorType state_temp = ukfVectorType::Ones(100) * 5;
+
     ukfVectorType fixed_params(2); 
     fixed_params(0) = 1;
     fixed_params(1) = 1;
@@ -1077,6 +1076,7 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     cout << "\n before " << state_temp.transpose() << endl;
     (*MySolver).Solve(state_temp);
     cout << "\n after " << (*MySolver).XOpt.transpose() << endl;
+    exit(0);
 
     // Output of the filter
     tmp_info_state = ConvertVector<State, stdVecState>(state);

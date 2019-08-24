@@ -370,14 +370,14 @@ public:
     //     }
     // }
 
-    void functionGradient(const ukfVectorType &x, ukfVectorType &grad)
+    void functionGradient(ukfVectorType &x, ukfVectorType &grad)
     {
         grad.resize(x.size());
         grad(0) = -400 * (x(1) - x(0) * x(0)) * x(0) - 2 * (1 - x(0));
         grad(1) = 200 * (x(1) - x(0) * x(0));
     }
 
-    ukfPrecisionType functionValue(const ukfVectorType &x)
+    ukfPrecisionType functionValue(ukfVectorType &x)
     {
         const double t1 = (1 - x[0]);
         const double t2 = (x[1] - x[0] * x[0]);
@@ -524,7 +524,7 @@ public:
         return alphastar;
     }
 
-    ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
+    ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
     {
         ukfPrecisionType c1 = 1e-4;
         ukfPrecisionType c2 = 0.9;
@@ -532,6 +532,7 @@ public:
         unsigned max_iter = 20;
         ukfPrecisionType dphi0 = g0.dot(p);
         ukfPrecisionType dphi = 0.0;
+
         ukfPrecisionType alpha = 0.0;
         ukfPrecisionType alpha_i = 0.0;
         ukfPrecisionType f_i = 0.0;
@@ -546,7 +547,7 @@ public:
             alpha = alpha_i;
             x = x0 + alpha_i * p;
             f_i = functionValue(x);
-            //std::cout << "x " << x.transpose() << " f = " << f_i << "alpha_i " << alpha_i << " \n";
+            
             functionGradient(x, g_i);
             x_lo = x0 + alpha_lo * p;
             f_lo = functionValue(x_lo);
@@ -577,7 +578,7 @@ public:
         return alpha;
     }
 
-    ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, ukfVectorType &p)
+    ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p)
     {
         // Init all necessary variables
         ukfPrecisionType c1 = 1e-4;
@@ -599,7 +600,7 @@ public:
         while (true)
         {
             x = x0 + alpha_i * p;
-            //std::cout << "alpha_i " << alpha_i << " x0 " << x.transpose() << " p " << p.transpose() << std::endl;
+
             f_i = functionValue(x);
             functionGradient(x, g_i);
             if ((f_i > f0 + c1 * dphi0) || ((i > 1) && (f_i >= f_im1)))
@@ -609,6 +610,7 @@ public:
             }
 
             dphi = g_i.dot(p);
+
             if (std::abs(dphi) <= -c2 * dphi0)
             {
                 alpha = alpha_i;
@@ -633,8 +635,8 @@ public:
 
             i++;
         }
-        std::cout << "f " << f_i << std::endl;
-        //after iter 4 smth goes wrong
+        std::cout << " f " << f_i;
+
         return alpha;
     }
 
@@ -649,6 +651,7 @@ public:
         ukfPrecisionType alpha = 1.0;
         if (line_search_flag)
             alpha = strongWolfeConditions(x, f, g, dx);
+
         x += alpha * dx;
     }
 
@@ -670,7 +673,7 @@ public:
             }
         }
         const unsigned FreeVarCount = FreeVariablesIndex.size();
-        std::cout << "FreeVarCount " << FreeVarCount << std::endl;
+
         if (FreeVarCount == 0)
         {
             line_search_flag = false;
@@ -734,16 +737,13 @@ public:
     {
         Assert(x0.rows() == lb.rows(), "lower bound size incorrect");
         Assert(x0.rows() == ub.rows(), "upper bound size incorrect");
-
-        Assert((x0.array() >= lb.array()).all(), "seed is not feasible (violates lower bound)");
-        Assert((x0.array() <= ub.array()).all(), "seed is not feasible (violates upper bound)");
-
         const unsigned DIM = x0.rows();
 
         ukfMatrixType yHistory = ukfMatrixType::Zero(DIM, 0);
         ukfMatrixType sHistory = ukfMatrixType::Zero(DIM, 0);
 
-        ukfVectorType x = x0, g;
+        ukfVectorType x = x0;
+        ukfVectorType g;
 
         ukfPrecisionType f = functionValue(x);
         functionGradient(x, g);
@@ -770,10 +770,13 @@ public:
             ukfMatrixType H;
 
             // STEP 4: perform linesearch
+            std::cout << "k " << k;
             LineSearch(x, SubspaceMin - x, f, g);
-
+            
             // STEP 5: compute gradient of the function
+            f = functionValue(x);
             functionGradient(x, g);
+            std::cout << " g " << g.transpose() << std::endl;
 
             // prepare for next iteration
             ukfVectorType newY = g - g_old;
