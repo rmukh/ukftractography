@@ -1058,26 +1058,8 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     // Estimate the initial state
     //InitLoopUKF(state, p, signal_values[i], dNormMSE);
     //mtx.Lock();
-    //NonLinearLeastSquareOptimization(thread_id, state, signal_values, _model);
+    NonLinearLeastSquareOptimization(thread_id, state, signal_values, _model);
     //mtx.Unlock();
-    ukfVectorType lowerBound = ukfVectorType::Ones(2) * -0.01;
-    ukfVectorType upperBound = ukfVectorType::Ones(2) * 0.5;
-    ukfVectorType state_temp(2);
-    state_temp(0) = -1.0;
-    state_temp(1) = 2.0;
-    ukfVectorType fixed_params(2); 
-    fixed_params(0) = 1;
-    fixed_params(1) = 1;
-
-    std::auto_ptr<LFBGSB> MySolver(new LFBGSB(lowerBound, upperBound, _signal_data->gradients(), _signal_data->GetBValues(), SetIdentityScaled(D_ISO), 0.7));
-
-    (*MySolver)._signal = signal;
-    (*MySolver)._fixed_params = fixed_params;
-    // solve the problem
-    cout << "\n before " << state_temp.transpose() << endl;
-    (*MySolver).Solve(state_temp);
-    cout << "\n after " << (*MySolver).XOpt.transpose() << endl;
-    exit(0);
 
     // Output of the filter
     tmp_info_state = ConvertVector<State, stdVecState>(state);
@@ -1669,7 +1651,7 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   (*MySolver)._fixed_params = fixed_params;
   // solve the problem
   cout << "\n before " << state_temp.transpose() << endl;
-  //(*MySolver).Solve(state_temp);
+  (*MySolver).Solve(state_temp);
   cout << "\n after " << (*MySolver).XOpt.transpose() << endl;
   //exit(0);
 

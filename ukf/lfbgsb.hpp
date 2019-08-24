@@ -68,7 +68,7 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-10), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
+        : lb(l), ub(u), tol(1e-8), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
     {
         W = ukfMatrixType::Zero(l.rows(), 0);
         M = ukfMatrixType::Zero(0, 0);
@@ -186,203 +186,190 @@ public:
         err = sum / norm_sq_signal;
     }
 
-    // ukfPrecisionType functionValue(const ukfVectorType &x)
-    // {
-    //     ukfPrecisionType residual = 0.0;
-
-    //     // Convert the parameter to the ukfMtarixType
-    //     ukfVectorType localState(x.size() + _fixed_params.size());
-    //     if (1)
-    //     {
-    //         localState(0) = _fixed_params(0);
-    //         localState(1) = _fixed_params(1);
-    //         localState(2) = _fixed_params(2);
-    //         localState(7) = _fixed_params(3);
-    //         localState(8) = _fixed_params(4);
-    //         localState(9) = _fixed_params(5);
-    //         localState(14) = _fixed_params(6);
-    //         localState(15) = _fixed_params(7);
-    //         localState(16) = _fixed_params(8);
-    //         localState(21) = _fixed_params(9);
-    //         localState(22) = _fixed_params(10);
-    //         localState(23) = _fixed_params(11);
-
-    //         localState(3) = x(0);
-    //         localState(4) = x(1);
-    //         localState(5) = x(2);
-    //         localState(6) = x(3);
-    //         localState(10) = x(4);
-    //         localState(11) = x(5);
-    //         localState(12) = x(6);
-    //         localState(13) = x(7);
-    //         localState(17) = x(8);
-    //         localState(18) = x(9);
-    //         localState(19) = x(10);
-    //         localState(20) = x(11);
-    //         localState(24) = x(12);
-    //     }
-    //     else if (0)
-    //     {
-    //         localState(0) = _fixed_params(0);
-    //         localState(1) = _fixed_params(1);
-    //         localState(2) = _fixed_params(2);
-    //         localState(3) = _fixed_params(3);
-    //         localState(4) = _fixed_params(4);
-    //         localState(5) = _fixed_params(5);
-    //         localState(6) = _fixed_params(6);
-    //         localState(7) = _fixed_params(7);
-    //         localState(8) = _fixed_params(8);
-    //         localState(9) = _fixed_params(9);
-    //         localState(10) = _fixed_params(10);
-    //         localState(11) = _fixed_params(11);
-    //         localState(12) = _fixed_params(12);
-    //         localState(13) = _fixed_params(13);
-    //         localState(14) = _fixed_params(14);
-    //         localState(15) = _fixed_params(15);
-    //         localState(16) = _fixed_params(16);
-    //         localState(17) = _fixed_params(17);
-    //         localState(18) = _fixed_params(18);
-    //         localState(19) = _fixed_params(19);
-    //         localState(20) = _fixed_params(20);
-    //         localState(24) = _fixed_params(21);
-
-    //         localState(21) = x(0);
-    //         localState(22) = x(1);
-    //         localState(23) = x(2);
-    //     }
-    //     else
-    //     {
-    //         std::cout << "You have not specified the phase!";
-    //         throw;
-    //     }
-
-    //     // Estimate the signal
-    //     ukfVectorType estimatedSignal(_signal.size());
-
-    //     H(localState, estimatedSignal);
-
-    //     // Compute the error between the estimated signal and the acquired one
-    //     ukfPrecisionType err = 0.0;
-    //     computeError(estimatedSignal, _signal, err);
-    //     //cout << err << " ";
-
-    //     // Return the result
-    //     residual = err;
-    //     return residual;
-    // }
-
-    // void functionGradient(const ukfVectorType &x, ukfVectorType &grad)
-    // {
-    //     // We use numerical derivative
-    //     // slope = [f(x+h) - f(x-h)] / (2h)
-
-    //     unsigned int x_size = x.size();
-    //     ukfVectorType p_h(x_size);  // for f(x+h)
-    //     ukfVectorType p_hh(x_size); // for f(x-h)
-
-    //     // The size of the derivative is not set by default,
-    //     // so we have to do it manually
-    //     grad.resize(x_size);
-
-    //     // Set parameters
-    //     p_h = x;
-    //     p_hh = x;
-    //     /*
-    //     // Calculate derivative for each parameter (reference to the wikipedia page: Numerical Differentiation)
-    //     for (unsigned it = 0; it < x_size; ++it)
-    //     {
-    //         // // Optimal h is sqrt(epsilon machine) * x
-    //         // ukfPrecisionType h;
-    //         // if (x(it) == 0)
-    //         //     h = std::sqrt(EPS);
-    //         // else
-    //         //     h = std::sqrt(EPS) * x(it);
-
-    //         // //ukfPrecisionType h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
-
-    //         // // Volatile, otherwise compiler will optimize the value for dx
-    //         // volatile ukfPrecisionType xph = x(it) + h;
-
-    //         // // For taking into account the rounding error
-    //         // ukfPrecisionType dx = xph - x(it);
-
-    //         // // Compute the slope
-    //         // p_h(it) = xph;
-
-    //         // //p_hh[it] = parameters[it] - h;
-    //         // grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
-
-    //         // Estimating derivatives using Richardson's Extrapolation
-
-    //         //ukfPrecisionType h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
-    //         ukfPrecisionType h = 0.001;
-    //         // Compute d/dx[func(*first)] using a three-point
-    //         // central difference rule of O(dx^6).
-
-    //         const ukfPrecisionType dx1 = h;
-    //         const ukfPrecisionType dx2 = dx1 * 2;
-    //         const ukfPrecisionType dx3 = dx1 * 3;
-
-    //         p_h(it) = x(it) + dx1;
-    //         p_hh(it) = x(it) - dx1;
-    //         const ukfPrecisionType m1 = (functionValue(p_h) - functionValue(p_hh)) / 2;
-
-    //         p_h(it) = x(it) + dx2;
-    //         p_hh(it) = x(it) - dx2;
-    //         const ukfPrecisionType m2 = (functionValue(p_h) - functionValue(p_hh)) / 4;
-
-    //         p_h(it) = x(it) + dx3;
-    //         p_hh(it) = x(it) - dx3;
-    //         const ukfPrecisionType m3 = (functionValue(p_h) - functionValue(p_hh)) / 6;
-
-    //         const ukfPrecisionType fifteen_m1 = 15 * m1;
-    //         const ukfPrecisionType six_m2 = 6 * m2;
-    //         const ukfPrecisionType ten_dx1 = 10 * dx1;
-
-    //         grad(it) = ((fifteen_m1 - six_m2) + m3) / ten_dx1;
-
-    //         // Set parameters back for next iteration
-    //         p_h(it) = x(it);
-    //         p_hh(it) = x(it);
-    //     }
-    //     */
-    //     //original version
-    //     for (unsigned it = 0; it < x_size; ++it)
-    //     {
-    //         // Optimal h is sqrt(epsilon machine) * x
-    //         double h = std::sqrt(2.2204e-16) * std::max(std::abs(x(it)), 1e-7);
-
-    //         // Volatile, otherwise compiler will optimize the value for dx
-    //         volatile double xph = x(it) + h;
-
-    //         // For taking into account the rounding error
-    //         double dx = xph - x(it);
-
-    //         // Compute the slope
-    //         p_h[it] = xph;
-
-    //         //p_hh[it] = parameters[it] - h;
-    //         grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
-
-    //         // Set parameters back for next iteration
-    //         p_h(it) = x(it);
-    //         p_hh(it) = x(it);
-    //     }
-    // }
-
-    void functionGradient(ukfVectorType &x, ukfVectorType &grad)
+    ukfPrecisionType functionValue(const ukfVectorType &x)
     {
-        grad.resize(x.size());
-        grad(0) = -400 * (x(1) - x(0) * x(0)) * x(0) - 2 * (1 - x(0));
-        grad(1) = 200 * (x(1) - x(0) * x(0));
+        ukfPrecisionType residual = 0.0;
+
+        // Convert the parameter to the ukfMtarixType
+        ukfVectorType localState(x.size() + _fixed_params.size());
+        if (1)
+        {
+            localState(0) = _fixed_params(0);
+            localState(1) = _fixed_params(1);
+            localState(2) = _fixed_params(2);
+            localState(7) = _fixed_params(3);
+            localState(8) = _fixed_params(4);
+            localState(9) = _fixed_params(5);
+            localState(14) = _fixed_params(6);
+            localState(15) = _fixed_params(7);
+            localState(16) = _fixed_params(8);
+            localState(21) = _fixed_params(9);
+            localState(22) = _fixed_params(10);
+            localState(23) = _fixed_params(11);
+
+            localState(3) = x(0);
+            localState(4) = x(1);
+            localState(5) = x(2);
+            localState(6) = x(3);
+            localState(10) = x(4);
+            localState(11) = x(5);
+            localState(12) = x(6);
+            localState(13) = x(7);
+            localState(17) = x(8);
+            localState(18) = x(9);
+            localState(19) = x(10);
+            localState(20) = x(11);
+            localState(24) = x(12);
+        }
+        else if (0)
+        {
+            localState(0) = _fixed_params(0);
+            localState(1) = _fixed_params(1);
+            localState(2) = _fixed_params(2);
+            localState(3) = _fixed_params(3);
+            localState(4) = _fixed_params(4);
+            localState(5) = _fixed_params(5);
+            localState(6) = _fixed_params(6);
+            localState(7) = _fixed_params(7);
+            localState(8) = _fixed_params(8);
+            localState(9) = _fixed_params(9);
+            localState(10) = _fixed_params(10);
+            localState(11) = _fixed_params(11);
+            localState(12) = _fixed_params(12);
+            localState(13) = _fixed_params(13);
+            localState(14) = _fixed_params(14);
+            localState(15) = _fixed_params(15);
+            localState(16) = _fixed_params(16);
+            localState(17) = _fixed_params(17);
+            localState(18) = _fixed_params(18);
+            localState(19) = _fixed_params(19);
+            localState(20) = _fixed_params(20);
+            localState(24) = _fixed_params(21);
+
+            localState(21) = x(0);
+            localState(22) = x(1);
+            localState(23) = x(2);
+        }
+        else
+        {
+            std::cout << "You have not specified the phase!";
+            throw;
+        }
+
+        // Estimate the signal
+        ukfVectorType estimatedSignal(_signal.size());
+
+        H(localState, estimatedSignal);
+
+        // Compute the error between the estimated signal and the acquired one
+        ukfPrecisionType err = 0.0;
+        computeError(estimatedSignal, _signal, err);
+        //cout << err << " ";
+
+        // Return the result
+        residual = err;
+        return residual;
     }
 
-    ukfPrecisionType functionValue(ukfVectorType &x)
+    void functionGradient(const ukfVectorType &x, ukfVectorType &grad)
     {
-        const double t1 = (1 - x[0]);
-        const double t2 = (x[1] - x[0] * x[0]);
-        return t1 * t1 + 100 * t2 * t2;
+        // We use numerical derivative
+        // slope = [f(x+h) - f(x-h)] / (2h)
+
+        unsigned int x_size = x.size();
+        ukfVectorType p_h(x_size);  // for f(x+h)
+        ukfVectorType p_hh(x_size); // for f(x-h)
+
+        // The size of the derivative is not set by default,
+        // so we have to do it manually
+        grad.resize(x_size);
+
+        // Set parameters
+        p_h = x;
+        p_hh = x;
+        /*
+        // Calculate derivative for each parameter (reference to the wikipedia page: Numerical Differentiation)
+        for (unsigned it = 0; it < x_size; ++it)
+        {
+            // // Optimal h is sqrt(epsilon machine) * x
+            // ukfPrecisionType h;
+            // if (x(it) == 0)
+            //     h = std::sqrt(EPS);
+            // else
+            //     h = std::sqrt(EPS) * x(it);
+
+            // //ukfPrecisionType h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
+
+            // // Volatile, otherwise compiler will optimize the value for dx
+            // volatile ukfPrecisionType xph = x(it) + h;
+
+            // // For taking into account the rounding error
+            // ukfPrecisionType dx = xph - x(it);
+
+            // // Compute the slope
+            // p_h(it) = xph;
+
+            // //p_hh[it] = parameters[it] - h;
+            // grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
+
+            // Estimating derivatives using Richardson's Extrapolation
+
+            //ukfPrecisionType h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
+            ukfPrecisionType h = 0.001;
+            // Compute d/dx[func(*first)] using a three-point
+            // central difference rule of O(dx^6).
+
+            const ukfPrecisionType dx1 = h;
+            const ukfPrecisionType dx2 = dx1 * 2;
+            const ukfPrecisionType dx3 = dx1 * 3;
+
+            p_h(it) = x(it) + dx1;
+            p_hh(it) = x(it) - dx1;
+            const ukfPrecisionType m1 = (functionValue(p_h) - functionValue(p_hh)) / 2;
+
+            p_h(it) = x(it) + dx2;
+            p_hh(it) = x(it) - dx2;
+            const ukfPrecisionType m2 = (functionValue(p_h) - functionValue(p_hh)) / 4;
+
+            p_h(it) = x(it) + dx3;
+            p_hh(it) = x(it) - dx3;
+            const ukfPrecisionType m3 = (functionValue(p_h) - functionValue(p_hh)) / 6;
+
+            const ukfPrecisionType fifteen_m1 = 15 * m1;
+            const ukfPrecisionType six_m2 = 6 * m2;
+            const ukfPrecisionType ten_dx1 = 10 * dx1;
+
+            grad(it) = ((fifteen_m1 - six_m2) + m3) / ten_dx1;
+
+            // Set parameters back for next iteration
+            p_h(it) = x(it);
+            p_hh(it) = x(it);
+        }
+        */
+        //original version
+        for (unsigned it = 0; it < x_size; ++it)
+        {
+            // Optimal h is sqrt(epsilon machine) * x
+            double h = std::sqrt(2.2204e-16) * std::max(std::abs(x(it)), 1e-7);
+
+            // Volatile, otherwise compiler will optimize the value for dx
+            volatile double xph = x(it) + h;
+
+            // For taking into account the rounding error
+            double dx = xph - x(it);
+
+            // Compute the slope
+            p_h[it] = xph;
+
+            //p_hh[it] = parameters[it] - h;
+            grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
+
+            // Set parameters back for next iteration
+            p_h(it) = x(it);
+            p_hh(it) = x(it);
+        }
     }
+
     // Find cauchy point in x
     // start in x
     void GetGeneralizedCauchyPoint(ukfVectorType &x, ukfVectorType &g, ukfVectorType &x_cauchy, ukfVectorType &c)
@@ -511,7 +498,7 @@ public:
 		 */
         ukfPrecisionType alphastar = 1;
         const unsigned int n = FreeVariables.size();
-        for (unsigned int i = 0; i < n; i++)
+        for (unsigned int i = 0; i < n; ++i)
         {
             if (du(i) > 0)
                 alphastar = std::min(alphastar, (ub(FreeVariables[i]) - x_cp(FreeVariables[i])) / du(i));
@@ -693,8 +680,8 @@ public:
         N = ukfMatrixType::Identity(N.rows(), N.rows()) - M * N;
         // STEP: 5
         // v = N^{-1}*v
-        if (v.size() > 0)
-            v = N.lu().solve(v);
+
+        v = N.lu().solve(v);
         // STEP: 6
         // HERE IS A MISTAKE IN THE ORIGINAL PAPER!
         ukfVectorType du = -theta_inverse * r - theta_inverse * theta_inverse * WZ.transpose() * v;
@@ -746,8 +733,8 @@ public:
 
         unsigned k = 0;
         theta = 1.0;
-        W = ukfMatrixType::Zero(DIM, 1);
-        M = ukfMatrixType::Zero(1, 1);
+        W = ukfMatrixType::Zero(DIM, 0);
+        M = ukfMatrixType::Zero(0, 0);
 
         while (isOptimal(x, g) && (k < maxIter))
         {
@@ -756,9 +743,10 @@ public:
             ukfVectorType g_old = g;
 
             // STEP 2: compute the cauchy point by algorithm CP
-            ukfVectorType CauchyPoint = ukfMatrixType::Zero(DIM, 1);
-            ukfVectorType c = ukfMatrixType::Zero(DIM, 1);
+            ukfVectorType CauchyPoint = ukfVectorType::Zero(DIM);
+            ukfVectorType c = ukfVectorType::Zero(DIM);
             GetGeneralizedCauchyPoint(x, g, CauchyPoint, c);
+            std::cout << "k " << k << " f " << f << " cauchy passed " << std::endl;
 
             // STEP 3: compute a search direction d_k by the primal method
             ukfVectorType SubspaceMin;
@@ -810,7 +798,7 @@ public:
             MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
             M = MM.inverse();
 
-            if (std::abs(f_old - f) < tol)
+            if (std::fabs(f_old - f) < tol)
                 break;
 
             k++;
