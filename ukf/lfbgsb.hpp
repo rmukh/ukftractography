@@ -435,9 +435,6 @@ public:
         f_doubleprime = std::max(EPS, f_doubleprime);
         ukfPrecisionType f_primezero = -theta * f_prime;
         // \delta t_min :=	-f'/f''
-        //std::cout << "p " << p << std::endl;
-        //std::cout << "M " << M << std::endl;
-        //std::cout << " f_prime " << f_prime << " f_doubleprime " << f_doubleprime << std::endl;
         ukfPrecisionType dt_min = -f_prime / f_doubleprime;
         // t_old := 	0
         ukfPrecisionType t_old = 0;
@@ -635,7 +632,6 @@ public:
 
             i++;
         }
-        std::cout << " f " << f_i;
 
         return alpha;
     }
