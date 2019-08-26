@@ -29,7 +29,7 @@
  * (Byrd, Lu, Nocedal, Zhu)
  */
 /*
-   Redesigned, improved, integrated  by Rinat Mukhometzianov, 2019
+* Redesigned, improved, integrated  by Rinat Mukhometzianov, 2019
 */
 
 #ifndef LBFGSB_H_
@@ -68,7 +68,7 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-8), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
+        : lb(l), ub(u), tol(1e-12), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
     {
         W = ukfMatrixType::Zero(l.rows(), 0);
         M = ukfMatrixType::Zero(0, 0);
@@ -170,7 +170,7 @@ public:
         }
     }
 
-    void computeError(const ukfVectorType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
+    /* void computeError(const ukfVectorType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
     {
         ukfPrecisionType sum = 0.0;
         ukfPrecisionType norm_sq_signal = 0.0;
@@ -184,6 +184,20 @@ public:
         }
 
         err = sum / norm_sq_signal;
+    } */
+
+    void computeError(const ukfVectorType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
+    {
+        ukfPrecisionType sum = 0.0;
+        unsigned int N = signal.size() / 2;
+
+        for (unsigned int i = 0; i < N; ++i)
+        {
+            ukfPrecisionType diff = signal[i] - signal_estimate(i, 0);
+            sum += diff * diff;
+        }
+
+        err = (ukfPrecisionType)(1.0 / N) * sum;
     }
 
     ukfPrecisionType functionValue(const ukfVectorType &x)
@@ -271,7 +285,7 @@ public:
         return residual;
     }
 
-    void functionGradient(const ukfVectorType &x, ukfVectorType &grad)
+    void functionGradientMSE(const ukfVectorType &x, ukfVectorType &grad)
     {
         // We use numerical derivative
         // slope = [f(x+h) - f(x-h)] / (2h)
@@ -370,6 +384,92 @@ public:
         }
     }
 
+    /* void functionGradientMSE(const ukfVectorType &x, ukfVectorType &grad)
+    {
+        // The size of the derivative is not set by default,
+        // so we have to do it manually
+        grad.resize(x.size());
+
+        // Convert the parameter to the ukfMtarixType
+        ukfVectorType localState(x.size() + _fixed_params.size());
+        if (1)
+        {
+            localState(0) = _fixed_params(0);
+            localState(1) = _fixed_params(1);
+            localState(2) = _fixed_params(2);
+            localState(7) = _fixed_params(3);
+            localState(8) = _fixed_params(4);
+            localState(9) = _fixed_params(5);
+            localState(14) = _fixed_params(6);
+            localState(15) = _fixed_params(7);
+            localState(16) = _fixed_params(8);
+            localState(21) = _fixed_params(9);
+            localState(22) = _fixed_params(10);
+            localState(23) = _fixed_params(11);
+
+            localState(3) = x(0);
+            localState(4) = x(1);
+            localState(5) = x(2);
+            localState(6) = x(3);
+            localState(10) = x(4);
+            localState(11) = x(5);
+            localState(12) = x(6);
+            localState(13) = x(7);
+            localState(17) = x(8);
+            localState(18) = x(9);
+            localState(19) = x(10);
+            localState(20) = x(11);
+            localState(24) = x(12);
+        }
+        else if (0)
+        {
+            localState(0) = _fixed_params(0);
+            localState(1) = _fixed_params(1);
+            localState(2) = _fixed_params(2);
+            localState(3) = _fixed_params(3);
+            localState(4) = _fixed_params(4);
+            localState(5) = _fixed_params(5);
+            localState(6) = _fixed_params(6);
+            localState(7) = _fixed_params(7);
+            localState(8) = _fixed_params(8);
+            localState(9) = _fixed_params(9);
+            localState(10) = _fixed_params(10);
+            localState(11) = _fixed_params(11);
+            localState(12) = _fixed_params(12);
+            localState(13) = _fixed_params(13);
+            localState(14) = _fixed_params(14);
+            localState(15) = _fixed_params(15);
+            localState(16) = _fixed_params(16);
+            localState(17) = _fixed_params(17);
+            localState(18) = _fixed_params(18);
+            localState(19) = _fixed_params(19);
+            localState(20) = _fixed_params(20);
+            localState(24) = _fixed_params(21);
+
+            localState(21) = x(0);
+            localState(22) = x(1);
+            localState(23) = x(2);
+        }
+        else
+        {
+            std::cout << "You have not specified the phase!";
+            throw;
+        }
+
+        // Estimate the signal
+        ukfVectorType estimatedSignal(_signal.size());
+        H(localState, estimatedSignal);
+
+        ukfVectorType grad_out;
+        functionGradient(x, grad_out);
+
+        ukfPrecisionType diff_sum = 0.0;
+
+        for (unsigned int i = 0; i < _signal.size() / 2; ++i)
+            diff_sum += _signal[i] - estimatedSignal(i);
+
+        grad = (ukfPrecisionType)(-1.0 / x.size()) * diff_sum * grad_out;
+    } */
     // Find cauchy point in x
     // start in x
     void GetGeneralizedCauchyPoint(ukfVectorType &x, ukfVectorType &g, ukfVectorType &x_cauchy, ukfVectorType &c)
@@ -532,7 +632,7 @@ public:
             x = x0 + alpha_i * p;
             f_i = functionValue(x);
 
-            functionGradient(x, g_i);
+            functionGradientMSE(x, g_i);
             x_lo = x0 + alpha_lo * p;
             f_lo = functionValue(x_lo);
             if (f_i > f0 + c1 * alpha_i * dphi0 || f_i >= f_lo)
@@ -586,7 +686,7 @@ public:
             x = x0 + alpha_i * p;
 
             f_i = functionValue(x);
-            functionGradient(x, g_i);
+            functionGradientMSE(x, g_i);
             if ((f_i > f0 + c1 * dphi0) || ((i > 1) && (f_i >= f_im1)))
             {
                 alpha = zoomAlpha(x0, f0, g0, p, alpha_im1, alpha_i);
@@ -721,45 +821,49 @@ public:
         Assert(x0.rows() == lb.rows(), "lower bound size incorrect");
         Assert(x0.rows() == ub.rows(), "upper bound size incorrect");
         const unsigned DIM = x0.rows();
-
+        
+        // Declare and init matricies and vectors
         ukfMatrixType yHistory = ukfMatrixType::Zero(DIM, 0);
         ukfMatrixType sHistory = ukfMatrixType::Zero(DIM, 0);
+
+        ukfVectorType CauchyPoint = ukfVectorType::Zero(DIM);
+        ukfVectorType c = ukfVectorType::Zero(DIM);
+
+        ukfVectorType SubspaceMin;
+        ukfMatrixType H;
 
         ukfVectorType x = x0;
         ukfVectorType g;
 
         ukfPrecisionType f = functionValue(x);
-        functionGradient(x, g);
+        functionGradientMSE(x, g);
 
         unsigned k = 0;
         theta = 1.0;
         W = ukfMatrixType::Zero(DIM, 0);
         M = ukfMatrixType::Zero(0, 0);
 
-        while (isOptimal(x, g) && (k < maxIter))
+        while (isOptimal(x, g) && k < maxIter)
         {
             double f_old = f;
             ukfVectorType x_old = x;
             ukfVectorType g_old = g;
 
             // STEP 2: compute the cauchy point by algorithm CP
-            ukfVectorType CauchyPoint = ukfVectorType::Zero(DIM);
-            ukfVectorType c = ukfVectorType::Zero(DIM);
             GetGeneralizedCauchyPoint(x, g, CauchyPoint, c);
-            std::cout << "k " << k << " f " << f << " cauchy passed " << std::endl;
 
             // STEP 3: compute a search direction d_k by the primal method
-            ukfVectorType SubspaceMin;
+            
             SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
-
-            ukfMatrixType H;
 
             // STEP 4: perform linesearch
             LineSearch(x, SubspaceMin - x, f, g);
+            std::cout << " x " << x.transpose() << std::endl;
 
             // STEP 5: compute gradient of the function
             f = functionValue(x);
-            functionGradient(x, g);
+            functionGradientMSE(x, g);
+            std::cout << " g " << g.transpose() << std::endl;
 
             // prepare for next iteration
             ukfVectorType newY = g - g_old;
@@ -771,18 +875,21 @@ public:
             if (skipping < EPS)
             {
                 k++;
+                std::cout << " skipped k " << k;
                 continue;
             }
             if (k < m)
             {
-                yHistory.conservativeResize(DIM, k + 1);
-                sHistory.conservativeResize(DIM, k + 1);
+                unsigned cols = yHistory.cols() + 1;
+                yHistory.conservativeResize(DIM, cols);
+                sHistory.conservativeResize(DIM, cols);
             }
             else
             {
                 yHistory.leftCols(m - 1) = yHistory.rightCols(m - 1).eval();
                 sHistory.leftCols(m - 1) = sHistory.rightCols(m - 1).eval();
             }
+
             yHistory.rightCols(1) = newY;
             sHistory.rightCols(1) = newS;
 
@@ -802,6 +909,7 @@ public:
                 break;
 
             k++;
+            std::cout << " k " << k;
         }
 
         XOpt = x;
