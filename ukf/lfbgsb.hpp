@@ -189,15 +189,17 @@ public:
     void computeError(const ukfVectorType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
     {
         ukfPrecisionType sum = 0.0;
+        ukfPrecisionType norm_sq_signal = 0.0;
         unsigned int N = signal.size() / 2;
 
         for (unsigned int i = 0; i < N; ++i)
         {
-            ukfPrecisionType diff = signal[i] - signal_estimate(i, 0);
+            ukfPrecisionType diff = signal(i) - signal_estimate(i, 0);
             sum += diff * diff;
+            norm_sq_signal += signal(i) * signal(i);
         }
 
-        err = (ukfPrecisionType)(1.0 / N) * sum;
+        err = sum / norm_sq_signal;
     }
 
     ukfPrecisionType functionValue(const ukfVectorType &x)
@@ -296,7 +298,7 @@ public:
 
         // The size of the derivative is not set by default,
         // so we have to do it manually
-        grad.resize(x_size);
+        grad.conservativeResize(x_size);
 
         // Set parameters
         p_h = x;
@@ -812,8 +814,9 @@ public:
         }
 
         projGrad = projGrad - x;
-
-        return (projGrad.cwiseAbs()).maxCoeff() > tol;
+        bool opt = (projGrad.cwiseAbs()).maxCoeff() > tol;
+        std::cout << " opt ";
+        return opt;
     }
 
     void Solve(ukfVectorType &x0)
@@ -821,7 +824,8 @@ public:
         Assert(x0.rows() == lb.rows(), "lower bound size incorrect");
         Assert(x0.rows() == ub.rows(), "upper bound size incorrect");
         const unsigned DIM = x0.rows();
-        
+        XOpt.resize(x0.size());
+
         // Declare and init matricies and vectors
         ukfMatrixType yHistory = ukfMatrixType::Zero(DIM, 0);
         ukfMatrixType sHistory = ukfMatrixType::Zero(DIM, 0);
@@ -845,25 +849,25 @@ public:
 
         while (isOptimal(x, g) && k < maxIter)
         {
+            std::cout << "k ";
             double f_old = f;
             ukfVectorType x_old = x;
             ukfVectorType g_old = g;
 
             // STEP 2: compute the cauchy point by algorithm CP
             GetGeneralizedCauchyPoint(x, g, CauchyPoint, c);
-
+            std::cout << " GCP ";
             // STEP 3: compute a search direction d_k by the primal method
-            
-            SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
 
+            SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
+            std::cout << " SM ";
             // STEP 4: perform linesearch
             LineSearch(x, SubspaceMin - x, f, g);
-            std::cout << " x " << x.transpose() << std::endl;
+            std::cout << " LS ";
 
             // STEP 5: compute gradient of the function
             f = functionValue(x);
             functionGradientMSE(x, g);
-            std::cout << " g " << g.transpose() << std::endl;
 
             // prepare for next iteration
             ukfVectorType newY = g - g_old;
@@ -875,12 +879,12 @@ public:
             if (skipping < EPS)
             {
                 k++;
-                std::cout << " skipped k " << k;
                 continue;
             }
             if (k < m)
             {
                 unsigned cols = yHistory.cols() + 1;
+                std::cout << " cols " << cols << " ";
                 yHistory.conservativeResize(DIM, cols);
                 sHistory.conservativeResize(DIM, cols);
             }
@@ -893,8 +897,11 @@ public:
             yHistory.rightCols(1) = newY;
             sHistory.rightCols(1) = newS;
 
+            std::cout << " ys ";
+
             // STEP 7:
             theta = (ukfPrecisionType)(newY.dot(newY)) / (newY.dot(newS));
+            std::cout << " theta ";
 
             W = ukfMatrixType::Zero(yHistory.rows(), yHistory.cols() + sHistory.cols());
             W << yHistory, theta * sHistory;
@@ -905,11 +912,12 @@ public:
             MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
             M = MM.inverse();
 
+            std::cout << " M inv " << " F old " << f_old << " f " << f << " diff " << f_old - f << std::endl;
+
             if (std::fabs(f_old - f) < tol)
                 break;
 
             k++;
-            std::cout << " k " << k;
         }
 
         XOpt = x;
