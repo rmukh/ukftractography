@@ -612,7 +612,7 @@ public:
 
     ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
     {
-        ukfPrecisionType c1 = 1e-4;
+        ukfPrecisionType c1 = 1e-3;
         ukfPrecisionType c2 = 0.9;
         unsigned i = 0;
         unsigned max_iter = 20;
@@ -667,7 +667,7 @@ public:
     ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p)
     {
         // Init all necessary variables
-        ukfPrecisionType c1 = 1e-4;
+        ukfPrecisionType c1 = 1e-3;
         ukfPrecisionType c2 = 0.9;
         ukfPrecisionType alpha = 1.0;
         ukfPrecisionType alpha_max = 2.5;
@@ -805,7 +805,7 @@ public:
     {
         ukfVectorType projGrad = x - g;
 
-        for (int i = 0; i < x.size(); ++i)
+        for (unsigned i = 0; i < x.size(); ++i)
         {
             if (projGrad(i) < lb(i))
                 projGrad(i) = lb(i);
@@ -817,6 +817,52 @@ public:
         bool opt = (projGrad.cwiseAbs()).maxCoeff() > tol;
         std::cout << " opt ";
         return opt;
+    }
+
+    void JacobAdjust(ukfVectorType &x, ukfMatrixType &output)
+    {
+        const unsigned DIM = x.size();
+        output = ukfMatrixType::Identity(DIM, DIM);
+        ukfVectorType main = (x.array().exp() * (ub - lb).array() / (x.array().exp() + 1).pow(2));
+        output = main.asDiagonal();
+    }
+
+    void transform(ukfVectorType &x)
+    {
+        x = ((x - lb).array() + EPS).log() - ((ub - x).array() + EPS).log();
+    }
+
+    void invTransform(ukfVectorType &x)
+    {
+        const unsigned DIM = x.size();
+
+        for (unsigned i = 0; i < DIM; ++i)
+        {
+            if (!std::isfinite(x(i)))
+            {
+                if (std::isnan(x(i)))
+                {
+                    x(i) = (ub(i) - lb(i)) / 2.0;
+                }
+                else if (x(i) < 0.0)
+                {
+                    x(i) = lb(i) + EPS;
+                }
+                else
+                {
+                    x(i) = ub(i) - EPS;
+                }
+            }
+            else
+            {
+                x(i) = (lb(i) + EPS + (ub(i) - EPS) * std::exp(x(i))) / (1.0 + std::exp(x(i)));
+
+                if (!std::isfinite(x(i)))
+                {
+                    x(i) = ub(i) - EPS;
+                }
+            }
+        }
     }
 
     void Solve(ukfVectorType &x0)
@@ -837,8 +883,13 @@ public:
         ukfMatrixType H;
 
         ukfVectorType x = x0;
-        ukfVectorType g;
+        std::cout << "x before " << x.transpose() << std::endl;
+        transform(x);
+        std::cout << "x after " << x.transpose() << std::endl;
+        invTransform(x);
+        std::cout << "x inv " << x.transpose() << std::endl;
 
+        ukfVectorType g;
         ukfPrecisionType f = functionValue(x);
         functionGradientMSE(x, g);
 
@@ -912,7 +963,8 @@ public:
             MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
             M = MM.inverse();
 
-            std::cout << " M inv " << " F old " << f_old << " f " << f << " diff " << f_old - f << std::endl;
+            std::cout << " M inv "
+                      << " F old " << f_old << " f " << f << " diff " << f_old - f << std::endl;
 
             if (std::fabs(f_old - f) < tol)
                 break;
