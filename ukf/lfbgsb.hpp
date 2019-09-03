@@ -386,6 +386,19 @@ public:
         }
     }
 
+    ukfPrecisionType objFunc(ukfVectorType &x, ukfVectorType &grad)
+    {
+        ukfVectorType x_inv;
+        ukfVectorType vals_grad;
+        ukfMatrixType jacobian;
+
+        invTransform(x, x_inv);
+        functionGradientMSE(x_inv, vals_grad);
+        JacobAdjust(x, jacobian);
+        grad = jacobian.diagonal().array() * vals_grad.array();
+
+        return functionValue(x_inv);
+    }
     /* void functionGradientMSE(const ukfVectorType &x, ukfVectorType &grad)
     {
         // The size of the derivative is not set by default,
@@ -815,7 +828,6 @@ public:
 
         projGrad = projGrad - x;
         bool opt = (projGrad.cwiseAbs()).maxCoeff() > tol;
-        std::cout << " opt ";
         return opt;
     }
 
@@ -827,39 +839,41 @@ public:
         output = main.asDiagonal();
     }
 
-    void transform(ukfVectorType &x)
+    void transform(ukfVectorType &in, ukfVectorType &out)
     {
-        x = ((x - lb).array() + EPS).log() - ((ub - x).array() + EPS).log();
+        out.resizeLike(in);
+        out = ((in - lb).array() + EPS).log() - ((ub - in).array() + EPS).log();
     }
 
-    void invTransform(ukfVectorType &x)
+    void invTransform(ukfVectorType &in, ukfVectorType &out)
     {
-        const unsigned DIM = x.size();
+        const unsigned DIM = in.size();
+        out.resizeLike(in);
 
         for (unsigned i = 0; i < DIM; ++i)
         {
-            if (!std::isfinite(x(i)))
+            if (!std::isfinite(in(i)))
             {
-                if (std::isnan(x(i)))
+                if (std::isnan(in(i)))
                 {
-                    x(i) = (ub(i) - lb(i)) / 2.0;
+                    out(i) = (ub(i) - lb(i)) / 2.0;
                 }
-                else if (x(i) < 0.0)
+                else if (in(i) < 0.0)
                 {
-                    x(i) = lb(i) + EPS;
+                    out(i) = lb(i) + EPS;
                 }
                 else
                 {
-                    x(i) = ub(i) - EPS;
+                    out(i) = ub(i) - EPS;
                 }
             }
             else
             {
-                x(i) = (lb(i) + EPS + (ub(i) - EPS) * std::exp(x(i))) / (1.0 + std::exp(x(i)));
+                out(i) = (lb(i) + EPS + (ub(i) - EPS) * std::exp(in(i))) / (1.0 + std::exp(in(i)));
 
-                if (!std::isfinite(x(i)))
+                if (!std::isfinite(in(i)))
                 {
-                    x(i) = ub(i) - EPS;
+                    out(i) = ub(i) - EPS;
                 }
             }
         }
@@ -882,16 +896,18 @@ public:
         ukfVectorType SubspaceMin;
         ukfMatrixType H;
 
-        ukfVectorType x = x0;
-        std::cout << "x before " << x.transpose() << std::endl;
-        transform(x);
-        std::cout << "x after " << x.transpose() << std::endl;
-        invTransform(x);
-        std::cout << "x inv " << x.transpose() << std::endl;
+        ukfVectorType x;
+        transform(x0, x);
 
         ukfVectorType g;
-        ukfPrecisionType f = functionValue(x);
-        functionGradientMSE(x, g);
+        double f = objFunc(x, g);
+
+        double err = g.norm();
+        if (err <= tol)
+        {
+            XOpt = x0;
+            return;
+        }
 
         unsigned k = 0;
         theta = 1.0;
@@ -900,25 +916,21 @@ public:
 
         while (isOptimal(x, g) && k < maxIter)
         {
-            std::cout << "k ";
             double f_old = f;
             ukfVectorType x_old = x;
             ukfVectorType g_old = g;
 
             // STEP 2: compute the cauchy point by algorithm CP
             GetGeneralizedCauchyPoint(x, g, CauchyPoint, c);
-            std::cout << " GCP ";
-            // STEP 3: compute a search direction d_k by the primal method
 
+            // STEP 3: compute a search direction d_k by the primal method
             SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
-            std::cout << " SM ";
+
             // STEP 4: perform linesearch
             LineSearch(x, SubspaceMin - x, f, g);
-            std::cout << " LS ";
 
             // STEP 5: compute gradient of the function
-            f = functionValue(x);
-            functionGradientMSE(x, g);
+            f = objFunc(x, g);
 
             // prepare for next iteration
             ukfVectorType newY = g - g_old;
@@ -935,7 +947,6 @@ public:
             if (k < m)
             {
                 unsigned cols = yHistory.cols() + 1;
-                std::cout << " cols " << cols << " ";
                 yHistory.conservativeResize(DIM, cols);
                 sHistory.conservativeResize(DIM, cols);
             }
@@ -948,11 +959,8 @@ public:
             yHistory.rightCols(1) = newY;
             sHistory.rightCols(1) = newS;
 
-            std::cout << " ys ";
-
             // STEP 7:
             theta = (ukfPrecisionType)(newY.dot(newY)) / (newY.dot(newS));
-            std::cout << " theta ";
 
             W = ukfMatrixType::Zero(yHistory.rows(), yHistory.cols() + sHistory.cols());
             W << yHistory, theta * sHistory;
@@ -963,16 +971,13 @@ public:
             MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
             M = MM.inverse();
 
-            std::cout << " M inv "
-                      << " F old " << f_old << " f " << f << " diff " << f_old - f << std::endl;
-
             if (std::fabs(f_old - f) < tol)
                 break;
 
             k++;
         }
 
-        XOpt = x;
+        invTransform(x, XOpt);
     }
 
 private:

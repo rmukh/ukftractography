@@ -1627,9 +1627,8 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   upperBound[12] = 1.0;
 
   //demo
-  
-  cout << "demo \n";
-  state_temp << 706.154,  125.35, 494.308,  87.745, 706.154 , 125.35 ,494.308,  87.745, 706.154 , 125.35, 494.308 , 87.745  ,  0.05;
+  //cout << "demo \n";
+  //state_temp << 706.154,  125.35, 494.308,  87.745, 706.154 , 125.35 ,494.308,  87.745, 706.154 , 125.35, 494.308 , 87.745  ,  0.05;
 
   //cout << "before \n " << state_temp << endl;
   // init solver with bounds
