@@ -68,7 +68,8 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-12), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
+        : lb(l), ub(u), tol(1e-12), maxIter(500), m(10), theta(1.0), wolfe1(1e-03), wolfe2(0.9), gradients(grads), b_vals(b), m_D_iso(diso),
+          _w_fast_diffusion(w_fast), line_search_flag(true)
     {
         W = ukfMatrixType::Zero(l.rows(), 0);
         M = ukfMatrixType::Zero(0, 0);
@@ -386,20 +387,17 @@ public:
         }
     }
 
-    ukfPrecisionType objFunc(ukfVectorType &x, ukfVectorType &grad, bool is_grad)
+    ukfPrecisionType objFunc(ukfVectorType &x, ukfVectorType &grad)
     {
         ukfVectorType x_inv;
         invTransform(x, x_inv);
 
-        if (is_grad)
-        {
-            ukfVectorType vals_grad;
-            ukfMatrixType jacobian;
+        ukfVectorType vals_grad;
+        ukfMatrixType jacobian;
 
-            functionGradientMSE(x_inv, vals_grad);
-            JacobAdjust(x, jacobian);
-            grad = jacobian.diagonal().array() * vals_grad.array();
-        }
+        functionGradientMSE(x_inv, vals_grad);
+        JacobAdjust(x, jacobian);
+        grad = jacobian.diagonal().array() * vals_grad.array();
 
         return functionValue(x_inv);
     }
@@ -501,7 +499,6 @@ public:
         // {all t_i} = { (idx,value), ... }
         std::vector<std::pair<int, ukfPrecisionType>> SetOfT;
         // the feasible set is implicitly given by "SetOfT - {t_i==0}"
-        ukfVectorType d = -g;
 
         for (unsigned j = 0; j < DIM; ++j)
         {
@@ -746,15 +743,28 @@ public:
     // f current value of objective (will be changed)
     // f current gradient of objective (will be changed)
     // t step width (will be changed)
-    void LineSearch(ukfVectorType &x, ukfVectorType dx, ukfPrecisionType &f, ukfVectorType &g)
+    ukfPrecisionType LineSearch(ukfVectorType &x, ukfVectorType &grad, ukfPrecisionType &dir)
     {
-        ukfPrecisionType alpha = 1.0;
-        if (line_search_flag)
-            alpha = strongWolfeConditions(x, f, g, dx);
+        ukfPrecisionType step = 1.0;
+        const unsigned iter_max = 100;
 
-        x += alpha * dx;
+        const ukfPrecisionType step_min = 0.0;
+        const ukfPrecisionType step_max = 10.0;
+        const ukfPrecisionType x_tol = 1e-04;
+
+        unsigned info = 0, infoc = 1;
+        const ukfPrecisionType extra_delta = 4;
+
+        ukfVectorType x_0 = x;
+
+        ukfPrecisionType f_step = objFunc(x, grad);
+
+        ukfPrecisionType dgrad_init = grad.dot(dir);
+
+        if(dgrad_init >= 0) {
+            return step;
+        }
     }
-
     // direct primal approach
     void SubspaceMinimization(ukfVectorType &x_cauchy, ukfVectorType &x, ukfVectorType &c, ukfVectorType &g, ukfVectorType &SubspaceMin)
     {
@@ -885,8 +895,31 @@ public:
     {
         Assert(x0.rows() == lb.rows(), "lower bound size incorrect");
         Assert(x0.rows() == ub.rows(), "upper bound size incorrect");
-        const unsigned DIM = x0.rows();
+
         XOpt.resize(x0.size());
+        const unsigned DIM = x0.rows();
+
+        ukfVectorType x;
+        transform(x0, x);
+
+        // Gradient vector
+        ukfVectorType g;
+        objFunc(x, g, true);
+
+        double err = g.norm();
+        if (err <= tol)
+        {
+            XOpt = x0;
+            return;
+        }
+
+        // Search direction
+        ukfVectorType d = -g;
+
+        ukfVectorType x_prev = x;
+        ukfVectorType g_prev = g;
+
+        LineSearch(x_prev, g_prev, d);
 
         // Declare and init matricies and vectors
         ukfMatrixType yHistory = ukfMatrixType::Zero(DIM, 0);
@@ -898,19 +931,6 @@ public:
         ukfVectorType SubspaceMin;
         ukfMatrixType H;
 
-        ukfVectorType x;
-        transform(x0, x);
-
-        ukfVectorType g;
-        double f = objFunc(x, g, true);
-
-        double err = g.norm();
-        if (err <= tol)
-        {
-            XOpt = x0;
-            return;
-        }
-
         unsigned k = 0;
         theta = 1.0;
         W = ukfMatrixType::Zero(DIM, 0);
@@ -918,7 +938,6 @@ public:
 
         while (isOptimal(x, g) && k < maxIter)
         {
-            double f_old = f;
             ukfVectorType x_old = x;
             ukfVectorType g_old = g;
 
@@ -973,9 +992,6 @@ public:
             MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
             M = MM.inverse();
 
-            if (std::fabs(f_old - f) < tol)
-                break;
-
             k++;
         }
 
@@ -991,6 +1007,8 @@ private:
     const ukfVectorType &b_vals;
     const mat33_t &m_D_iso;
     ukfPrecisionType _w_fast_diffusion;
+    ukfPrecisionType wolfe1;
+    ukfPrecisionType wolfe2;
     bool line_search_flag;
 };
 
