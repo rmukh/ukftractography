@@ -386,16 +386,20 @@ public:
         }
     }
 
-    ukfPrecisionType objFunc(ukfVectorType &x, ukfVectorType &grad)
+    ukfPrecisionType objFunc(ukfVectorType &x, ukfVectorType &grad, bool is_grad)
     {
         ukfVectorType x_inv;
-        ukfVectorType vals_grad;
-        ukfMatrixType jacobian;
-
         invTransform(x, x_inv);
-        functionGradientMSE(x_inv, vals_grad);
-        JacobAdjust(x, jacobian);
-        grad = jacobian.diagonal().array() * vals_grad.array();
+
+        if (is_grad)
+        {
+            ukfVectorType vals_grad;
+            ukfMatrixType jacobian;
+
+            functionGradientMSE(x_inv, vals_grad);
+            JacobAdjust(x, jacobian);
+            grad = jacobian.diagonal().array() * vals_grad.array();
+        }
 
         return functionValue(x_inv);
     }
@@ -625,7 +629,7 @@ public:
 
     ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
     {
-        ukfPrecisionType c1 = 1e-3;
+        ukfPrecisionType c1 = 1e-4;
         ukfPrecisionType c2 = 0.9;
         unsigned i = 0;
         unsigned max_iter = 20;
@@ -645,11 +649,10 @@ public:
             alpha_i = 0.5 * (alpha_lo + alpha_hi);
             alpha = alpha_i;
             x = x0 + alpha_i * p;
-            f_i = functionValue(x);
+            f_i = objFunc(x, g_i, true);
 
-            functionGradientMSE(x, g_i);
             x_lo = x0 + alpha_lo * p;
-            f_lo = functionValue(x_lo);
+            f_lo = objFunc(x_lo, g_i, false);
             if (f_i > f0 + c1 * alpha_i * dphi0 || f_i >= f_lo)
             {
                 alpha_hi = alpha_i;
@@ -680,7 +683,7 @@ public:
     ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p)
     {
         // Init all necessary variables
-        ukfPrecisionType c1 = 1e-3;
+        ukfPrecisionType c1 = 1e-4;
         ukfPrecisionType c2 = 0.9;
         ukfPrecisionType alpha = 1.0;
         ukfPrecisionType alpha_max = 2.5;
@@ -700,8 +703,7 @@ public:
         {
             x = x0 + alpha_i * p;
 
-            f_i = functionValue(x);
-            functionGradientMSE(x, g_i);
+            f_i = objFunc(x, g_i, true);
             if ((f_i > f0 + c1 * dphi0) || ((i > 1) && (f_i >= f_im1)))
             {
                 alpha = zoomAlpha(x0, f0, g0, p, alpha_im1, alpha_i);
@@ -900,7 +902,7 @@ public:
         transform(x0, x);
 
         ukfVectorType g;
-        double f = objFunc(x, g);
+        double f = objFunc(x, g, true);
 
         double err = g.norm();
         if (err <= tol)
@@ -930,7 +932,7 @@ public:
             LineSearch(x, SubspaceMin - x, f, g);
 
             // STEP 5: compute gradient of the function
-            f = objFunc(x, g);
+            f = objFunc(x, g, true);
 
             // prepare for next iteration
             ukfVectorType newY = g - g_old;
