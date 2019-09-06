@@ -1,35 +1,36 @@
-/**
- *           c++11-only implementation of the L-BFGS-B algorithm
- *
- * Copyright (c) 2014 Patrick Wieschollek
- *               https://github.com/PatWie/LBFGSB
- * All rights reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+/*
+  ################################################################################
+  ##
+  ##   Copyright (C) 2016-2018 Keith O'Hara
+  ##
+  ##   The part of the code of this file is part of the OptimLib C++ library.
+  ##   The original code you can find:
+  ##   https://github.com/kthohr/optim/blob/48c657ae29a0daf17ba1a363b461a28717c97cfd/src/line_search/more_thuente.cpp
+  ##   https://github.com/kthohr/optim/blob/48c657ae29a0daf17ba1a363b461a28717c97cfd/src/unconstrained/lbfgs.cpp
+  ##   The code was changed by Rinat Mukhometzianov, 2019 (C)
+  ##   
+  ##   Licensed under the Apache License, Version 2.0 (the "License");
+  ##   you may not use this file except in compliance with the License.
+  ##   You may obtain a copy of the License at
+  ##
+  ##       http://www.apache.org/licenses/LICENSE-2.0
+  ##
+  ##   Unless required by applicable law or agreed to in writing, software
+  ##   distributed under the License is distributed on an "AS IS" BASIS,
+  ##   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ##   See the License for the specific language governing permissions and
+  ##   limitations under the License.
+  ##
+  ################################################################################
+  */
 
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
-
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 /* 
  * based on the paper
  * A LIMITED MEMORY ALGORITHM FOR BOUND CONSTRAINED OPTIMIZATION
  * (Byrd, Lu, Nocedal, Zhu)
  */
 /*
-* Redesigned, improved, integrated  by Rinat Mukhometzianov, 2019
+* Redesigned, improved, and integrated by Rinat Mukhometzianov, 2019
 */
 
 #ifndef LBFGSB_H_
@@ -57,7 +58,6 @@
 
 class LFBGSB
 {
-    ukfMatrixType W, M;
     ukfVectorType lb, ub;
 
 public:
@@ -68,11 +68,9 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-12), maxIter(500), m(10), theta(1.0), wolfe1(1e-03), wolfe2(0.9), gradients(grads), b_vals(b), m_D_iso(diso),
-          _w_fast_diffusion(w_fast), line_search_flag(true)
+        : lb(l), ub(u), tol(1e-12), maxIter(2000), m(10), gradients(grads), b_vals(b), m_D_iso(diso),
+          _w_fast_diffusion(w_fast), wolfe1(1e-03), wolfe2(0.9)
     {
-        W = ukfMatrixType::Zero(l.rows(), 0);
-        M = ukfMatrixType::Zero(0, 0);
     }
 
     std::vector<int> sort_indexes(const std::vector<std::pair<int, ukfPrecisionType>> &v)
@@ -393,11 +391,11 @@ public:
         invTransform(x, x_inv);
 
         ukfVectorType vals_grad;
-        ukfMatrixType jacobian;
+        ukfVectorType jacobian;
 
         functionGradientMSE(x_inv, vals_grad);
         JacobAdjust(x, jacobian);
-        grad = jacobian.diagonal().array() * vals_grad.array();
+        grad = jacobian.array() * vals_grad.array();
 
         return functionValue(x_inv);
     }
@@ -487,266 +485,228 @@ public:
 
         grad = (ukfPrecisionType)(-1.0 / x.size()) * diff_sum * grad_out;
     } */
-    // Find cauchy point in x
-    // start in x
-    void GetGeneralizedCauchyPoint(ukfVectorType &x, ukfVectorType &g, ukfVectorType &x_cauchy, ukfVectorType &c)
+
+    // Supremum norm
+    ukfPrecisionType sup_norm(const ukfPrecisionType a, const ukfPrecisionType b, const ukfPrecisionType c)
     {
-        const unsigned DIM = x.rows();
-        // PAGE 8
-        // Algorithm CP: Computation of the generalized Cauchy point
-        // Given x,l,u,g, and B = \theta I-WMW
-
-        // {all t_i} = { (idx,value), ... }
-        std::vector<std::pair<int, ukfPrecisionType>> SetOfT;
-        // the feasible set is implicitly given by "SetOfT - {t_i==0}"
-
-        for (unsigned j = 0; j < DIM; ++j)
-        {
-            ukfPrecisionType tmp = 0.0;
-
-            if (g(j) == 0.0)
-            {
-                SetOfT.push_back(std::make_pair(j, INF));
-            }
-            else
-            {
-                if (g(j) < 0.0)
-                    tmp = (x(j) - ub(j)) / g(j);
-                else if (g(j) > 0.0)
-                    tmp = (x(j) - lb(j)) / g(j);
-
-                SetOfT.push_back(std::make_pair(j, tmp));
-            }
-
-            if (tmp < EPS)
-                d(j) = 0.0;
-        }
-
-        // sortedindices [1,0,2] means the minimal element is on the 1th entry
-        std::vector<int> SortedIndices = sort_indexes(SetOfT); // using heapsort
-
-        // Initialize
-        x_cauchy = x;
-        // p := 	W^T*p
-        ukfVectorType p = W.transpose() * d; // (2mn operations)
-        // c := 	0
-        c = ukfVectorType::Zero(W.cols());
-        // f' := 	g^T*d = -d^Td
-        ukfPrecisionType f_prime = -d.dot(d); // (n operations)
-        // f'' :=	\theta*d^T*d-d^T*W*M*W^T*d = -\theta*f' - p^T*M*p
-        ukfPrecisionType f_doubleprime = (ukfPrecisionType)(-theta) * f_prime - p.dot(M * p); // (O(m^2) operations)
-        f_doubleprime = std::max(EPS, f_doubleprime);
-        ukfPrecisionType f_primezero = -theta * f_prime;
-        // \delta t_min :=	-f'/f''
-        ukfPrecisionType dt_min = -f_prime / f_doubleprime;
-        // t_old := 	0
-        ukfPrecisionType t_old = 0;
-
-        unsigned i = 0;
-        for (unsigned j = 0; j < DIM; j++)
-        {
-            i = j;
-            if (SetOfT[SortedIndices[j]].second > 0)
-                break;
-        }
-
-        // b := i s.t t_i = t
-        int b = SortedIndices[i];
-        // t := min{ti : i in F}
-        ukfPrecisionType t = SetOfT[b].second;
-
-        // \delta t := 	t - 0
-        ukfPrecisionType dt = t - t_old;
-
-        // examination of subsequent segments
-        while (dt_min >= dt && i < DIM)
-        {
-            if (d(b) > 0)
-                x_cauchy(b) = ub(b);
-            else if (d(b) < 0)
-                x_cauchy(b) = lb(b);
-
-            // z_b := x_p^{cp} - x_b
-            ukfPrecisionType zb = x_cauchy(b) - x(b);
-            // c :=  c +\delta t*p
-            c += dt * p;
-
-            ukfVectorType wbt = W.row(b);
-
-            ukfPrecisionType gb = g(b);
-            f_prime += dt * f_doubleprime + gb * gb + theta * gb * zb - gb * wbt.transpose() * (M * c);
-            f_doubleprime += -theta * gb * gb - 2.0 * (gb * (wbt.dot(M * p))) - gb * gb * wbt.transpose() * (M * wbt);
-            f_doubleprime = std::max(EPS * f_primezero, f_doubleprime);
-
-            p += gb * wbt.transpose();
-            d(b) = 0;
-            dt_min = -f_prime / f_doubleprime;
-            t_old = t;
-            ++i;
-            if (i < DIM)
-            {
-                b = SortedIndices[i];
-                t = SetOfT[b].second;
-                dt = t - t_old;
-            }
-        }
-
-        dt_min = std::max(dt_min, 0.0);
-        t_old += dt_min;
-
-        for (unsigned ii = i; ii < x_cauchy.rows(); ++ii)
-        {
-            x_cauchy(SortedIndices[ii]) = x(SortedIndices[ii]) + t_old * d(SortedIndices[ii]);
-        }
-
-        c += dt_min * p;
+        return std::max(std::max(std::abs(a), std::abs(b)), std::abs(c));
     }
 
-    // find valid alpha for (8.5)
-    // x_cp cauchy point
-    // du unconstrained solution of subspace minimization
-    // FreeVariables flag (1 if is free variable and 0 if is not free variable)
-    ukfPrecisionType FindAlpha(ukfVectorType &x_cp, ukfVectorType &du, std::vector<int> &FreeVariables)
+    // Update the interval of uncertainty
+    unsigned interv_uncert(ukfPrecisionType &st_best, ukfPrecisionType &f_best, ukfPrecisionType &d_best,
+                           ukfPrecisionType &st_other, ukfPrecisionType &f_other, ukfPrecisionType &d_other,
+                           ukfPrecisionType &step, ukfPrecisionType &f_step, ukfPrecisionType &d_step,
+                           bool &bracket, ukfPrecisionType step_min, ukfPrecisionType step_max)
     {
-        /* 
-         * this returns
-		 * a* = max {a : a <= 1 and  l_i-xc_i <= a*d_i <= u_i-xc_i}
-		 */
-        ukfPrecisionType alphastar = 1;
-        const unsigned int n = FreeVariables.size();
-        for (unsigned int i = 0; i < n; ++i)
+        bool bound = false;
+        unsigned info = 0;
+        ukfPrecisionType sgnd = d_step * (d_best / std::abs(d_best));
+
+        ukfPrecisionType theta, s, gamma, p, q, r, step_c, step_q, step_f;
+
+        if (f_step > f_best)
         {
-            if (du(i) > 0)
-                alphastar = std::min(alphastar, (ub(FreeVariables[i]) - x_cp(FreeVariables[i])) / du(i));
-            else
-                alphastar = std::min(alphastar, (lb(FreeVariables[i]) - x_cp(FreeVariables[i])) / du(i));
-        }
-        return alphastar;
-    }
+            info = 1;
+            bound = true;
 
-    ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
-    {
-        ukfPrecisionType c1 = 1e-4;
-        ukfPrecisionType c2 = 0.9;
-        unsigned i = 0;
-        unsigned max_iter = 20;
-        ukfPrecisionType dphi0 = g0.dot(p);
-        ukfPrecisionType dphi = 0.0;
+            theta = 3 * (f_best - f_step) / (step - st_best) + d_best + d_step;
+            s = sup_norm(theta, d_best, d_step);
 
-        ukfPrecisionType alpha = 0.0;
-        ukfPrecisionType alpha_i = 0.0;
-        ukfPrecisionType f_i = 0.0;
-        ukfPrecisionType f_lo = 0.0;
-        ukfVectorType x;
-        ukfVectorType x_lo;
-        ukfVectorType g_i;
-
-        while (true)
-        {
-            alpha_i = 0.5 * (alpha_lo + alpha_hi);
-            alpha = alpha_i;
-            x = x0 + alpha_i * p;
-            f_i = objFunc(x, g_i, true);
-
-            x_lo = x0 + alpha_lo * p;
-            f_lo = objFunc(x_lo, g_i, false);
-            if (f_i > f0 + c1 * alpha_i * dphi0 || f_i >= f_lo)
+            gamma = s * std::sqrt(std::pow(theta / s, 2) - (d_best / s) * (d_step / s));
+            if (step < st_best)
             {
-                alpha_hi = alpha_i;
+                gamma = -gamma;
+            }
+
+            p = (gamma - d_best) + theta;
+            q = ((gamma - d_best) + gamma) + d_step;
+            r = p / q;
+
+            step_c = st_best + r * (step - st_best);
+            step_q = st_best + ((d_best / ((f_best - f_step) / (step - st_best) + d_best)) / 2.0) * (step - st_best);
+
+            if (std::abs(step_c - st_best) < std::abs(step_q - st_best))
+            {
+                step_f = step_c;
             }
             else
             {
-                dphi = g_i.dot(p);
-                if (std::abs(dphi) <= -c2 * dphi0)
+                step_f = step_c + (step_q - step_c) / 2;
+            }
+
+            bracket = true;
+        }
+        else if (sgnd < 0.0)
+        {
+            info = 2;
+            bound = false;
+
+            theta = 3 * (f_best - f_step) / (step - st_best) + d_best + d_step;
+            s = sup_norm(theta, d_best, d_step); // sup norm
+
+            gamma = s * std::sqrt(std::pow(theta / s, 2) - (d_best / s) * (d_step / s));
+            if (step > st_best)
+            {
+                gamma = -gamma;
+            }
+
+            p = (gamma - d_step) + theta;
+            q = ((gamma - d_step) + gamma) + d_best;
+            r = p / q;
+
+            step_c = step + r * (st_best - step);
+            step_q = step + (d_step / (d_step - d_best)) * (st_best - step);
+
+            if (std::abs(step_c - step) > std::abs(step_q - step))
+            {
+                step_f = step_c;
+            }
+            else
+            {
+                step_f = step_q;
+            }
+
+            bracket = true;
+        }
+        else if (std::abs(d_step) < std::abs(d_best))
+        {
+            info = 3;
+            bound = true;
+
+            theta = 3 * (f_best - f_step) / (step - st_best) + d_best + d_step;
+            s = sup_norm(theta, d_best, d_step);
+
+            gamma = s * std::sqrt(std::max(0.0, std::pow(theta / s, 2) - (d_best / s) * (d_step / s)));
+            if (step > st_best)
+            {
+                gamma = -gamma;
+            }
+
+            p = (gamma - d_step) + theta;
+            q = (gamma + (d_best - d_step)) + gamma;
+            r = p / q;
+
+            if (r < 0.0 && gamma != 0.0)
+            {
+                step_c = step + r * (st_best - step);
+            }
+            else if (step > st_best)
+            {
+                step_c = step_max;
+            }
+            else
+            {
+                step_c = step_min;
+            }
+
+            step_q = step + (d_step / (d_step - d_best)) * (st_best - step);
+
+            if (bracket)
+            {
+                if (std::abs(step - step_c) < std::abs(step - step_q))
                 {
-                    alpha = alpha_i;
-                    break;
+                    step_f = step_c;
                 }
-                if (dphi * (alpha_hi - alpha_lo) >= 0)
-                    alpha_hi = alpha_lo;
-
-                alpha_lo = alpha_i;
+                else
+                {
+                    step_f = step_q;
+                }
             }
-            i++;
-            if (i > max_iter)
+            else
             {
-                alpha = alpha_i;
-                break;
+                if (std::abs(step - step_c) > std::abs(step - step_q))
+                {
+                    step_f = step_c;
+                }
+                else
+                {
+                    step_f = step_q;
+                }
             }
         }
-        return alpha;
-    }
-
-    ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p)
-    {
-        // Init all necessary variables
-        ukfPrecisionType c1 = 1e-4;
-        ukfPrecisionType c2 = 0.9;
-        ukfPrecisionType alpha = 1.0;
-        ukfPrecisionType alpha_max = 2.5;
-        ukfPrecisionType alpha_im1 = 0.0;
-        ukfPrecisionType alpha_i = 1.0;
-        ukfPrecisionType f_im1 = f0;
-        ukfPrecisionType f_i = 0;
-        ukfPrecisionType dphi0 = g0.dot(p);
-        ukfPrecisionType dphi = 0.0;
-        unsigned i = 0;
-        unsigned max_iter = 20;
-        ukfVectorType x;
-        ukfVectorType g_i;
-
-        // Perfome search for the alpha value which satisfy strong Wolfe conditions
-        while (true)
+        else
         {
-            x = x0 + alpha_i * p;
+            info = 4;
+            bound = false;
 
-            f_i = objFunc(x, g_i, true);
-            if ((f_i > f0 + c1 * dphi0) || ((i > 1) && (f_i >= f_im1)))
+            if (bracket)
             {
-                alpha = zoomAlpha(x0, f0, g0, p, alpha_im1, alpha_i);
-                break;
+                theta = 3 * (f_step - f_other) / (st_other - step) + d_other + d_step;
+                s = sup_norm(theta, d_other, d_step);
+
+                gamma = s * std::sqrt(std::pow(theta / s, 2) - (d_other / s) * (d_step / s));
+                if (step > st_other)
+                {
+                    gamma = -gamma;
+                }
+
+                p = (gamma - d_step) + theta;
+                q = ((gamma - d_step) + gamma) + d_other;
+                r = p / q;
+
+                step_c = step + r * (st_other - step);
+                step_f = step_c;
             }
-
-            dphi = g_i.dot(p);
-
-            if (std::abs(dphi) <= -c2 * dphi0)
+            else if (step > st_best)
             {
-                alpha = alpha_i;
-                break;
+                step_f = step_max;
             }
-            if (dphi >= 0)
+            else
             {
-                alpha = zoomAlpha(x0, f0, g0, p, alpha_i, alpha_im1);
-                break;
+                step_f = step_min;
             }
-
-            // update
-            alpha_im1 = alpha_i;
-            f_im1 = f_i;
-            alpha_i = alpha_i + 0.8 * (alpha_max - alpha_i);
-
-            if (i > max_iter)
-            {
-                alpha = alpha_i;
-                break;
-            }
-
-            i++;
         }
 
-        return alpha;
+        // Actually perform update of the interval
+
+        if (f_step > f_best)
+        {
+            st_other = step;
+            f_other = f_step;
+            d_other = d_step;
+        }
+        else
+        {
+            if (sgnd < 0.0)
+            {
+                st_other = st_best;
+                f_other = f_best;
+                d_other = d_best;
+            }
+
+            st_best = step;
+            f_best = f_step;
+            d_best = d_step;
+        }
+
+        // Compute new step
+
+        step_f = std::min(step_max, step_f);
+        step_f = std::max(step_min, step_f);
+        step = step_f;
+
+        if (bracket && bound)
+        {
+            if (st_other > st_best)
+            {
+                step = std::min(st_best + 0.66 * (st_other - st_best), step);
+            }
+            else
+            {
+                step = std::max(st_best + 0.66 * (st_other - st_best), step);
+            }
+        }
+
+        return info;
     }
 
     // Using linesearch to determine step width
     // x start in x
-    // dx direction
-    // f current value of objective (will be changed)
-    // f current gradient of objective (will be changed)
-    // t step width (will be changed)
-    ukfPrecisionType LineSearch(ukfVectorType &x, ukfVectorType &grad, ukfPrecisionType &dir)
+    ukfPrecisionType LineSearch(ukfVectorType &x, ukfVectorType &grad, ukfVectorType &dir)
     {
+        // Reimplemented from MINPACK Fortran utility and Matlab's port of MINPACK
         ukfPrecisionType step = 1.0;
-        const unsigned iter_max = 100;
+        const unsigned iter_max = 1000;
 
         const ukfPrecisionType step_min = 0.0;
         const ukfPrecisionType step_max = 10.0;
@@ -761,94 +721,132 @@ public:
 
         ukfPrecisionType dgrad_init = grad.dot(dir);
 
-        if(dgrad_init >= 0) {
+        if (dgrad_init >= 0)
+        {
             return step;
         }
-    }
-    // direct primal approach
-    void SubspaceMinimization(ukfVectorType &x_cauchy, ukfVectorType &x, ukfVectorType &c, ukfVectorType &g, ukfVectorType &SubspaceMin)
-    {
-        line_search_flag = true;
 
-        // cached value: ThetaInverse=1/theta;
-        ukfPrecisionType theta_inverse = 1.0 / theta;
+        ukfPrecisionType dgrad = dgrad_init;
+        unsigned iter = 0;
 
-        // size of "t"
-        std::vector<int> FreeVariablesIndex;
-        for (unsigned i = 0; i < x_cauchy.rows(); ++i)
+        bool bracket = false, stage_1 = true;
+
+        ukfPrecisionType f_init = f_step, dgrad_test = wolfe1 * dgrad_init;
+        ukfPrecisionType width = step_max - step_min, width_old = 2 * width;
+
+        ukfPrecisionType st_best = 0.0, f_best = f_init, dgrad_best = dgrad_init;
+        ukfPrecisionType st_other = 0.0, f_other = f_init, dgrad_other = dgrad_init;
+
+        while (1)
         {
-            if ((x_cauchy(i) != ub(i)) && (x_cauchy(i) != lb(i)))
+            iter++;
+
+            ukfPrecisionType st_min, st_max;
+
+            if (bracket)
             {
-                FreeVariablesIndex.push_back(i);
+                st_min = std::min(st_best, st_other);
+                st_max = std::max(st_best, st_other);
+            }
+            else
+            {
+                st_min = st_best;
+                st_max = step + extra_delta * (step - st_best);
+            }
+
+            step = std::min(std::max(step, step_min), step_max);
+
+            if ((bracket && (step <= st_min || step >= st_max)) || iter >= iter_max - 1 || infoc == 0 || (bracket && st_max - st_min <= x_tol * st_max))
+            {
+                step = st_best;
+            }
+
+            x = x_0 + step * dir;
+            f_step = objFunc(x, grad);
+
+            dgrad = grad.dot(dir);
+            ukfPrecisionType armijo_check_val = f_init + step * dgrad_test;
+
+            // check stop conditions
+
+            if ((bracket && (step <= st_min || step >= st_max)) || infoc == 0)
+            {
+                info = 6;
+            }
+            if (step == step_max && f_step <= armijo_check_val && dgrad <= dgrad_test)
+            {
+                info = 5;
+            }
+            if (step == step_min && (f_step > armijo_check_val || dgrad >= dgrad_test))
+            {
+                info = 4;
+            }
+            if (iter >= iter_max)
+            {
+                info = 3;
+            }
+            if (bracket && st_max - st_min <= x_tol * st_max)
+            {
+                info = 2;
+            }
+
+            // strong Wolfe conditions
+            if (f_step <= armijo_check_val && std::abs(dgrad) <= wolfe2 * (-dgrad_init))
+            {
+                info = 1;
+            }
+
+            if (info != 0)
+            {
+                return step;
+            }
+
+            if (stage_1 && f_step <= armijo_check_val && dgrad >= std::min(wolfe1, wolfe2) * dgrad_init)
+            {
+                stage_1 = false;
+            }
+
+            if (stage_1 && f_step <= f_best && f_step > armijo_check_val)
+            {
+                double f_mod = f_step - step * dgrad_test;
+                double f_best_mod = f_best - st_best * dgrad_test;
+                double f_other_mod = f_other - st_other * dgrad_test;
+
+                double dgrad_mod = dgrad - dgrad_test;
+                double dgrad_best_mod = dgrad_best - dgrad_test;
+                double dgrad_other_mod = dgrad_other - dgrad_test;
+
+                infoc = interv_uncert(st_best, f_best_mod, dgrad_best_mod, st_other, f_other_mod, dgrad_other_mod, step, f_mod, dgrad_mod, bracket, st_min, st_max);
+
+                f_best = f_best_mod + st_best * dgrad_test;
+                f_other = f_other_mod + st_other * dgrad_test;
+
+                dgrad_best = dgrad_best_mod + dgrad_test;
+                dgrad_other = dgrad_other_mod + dgrad_test;
+            }
+            else
+            {
+                infoc = interv_uncert(st_best, f_best, dgrad_best, st_other, f_other, dgrad_other, step, f_step, dgrad, bracket, st_min, st_max);
+            }
+
+            if (bracket)
+            {
+                if (std::abs(st_other - st_best) >= 0.66 * width_old)
+                {
+                    step = st_best + 0.5 * (st_other - st_best);
+                }
+
+                width_old = width;
+                width = std::abs(st_other - st_best);
             }
         }
-        const unsigned FreeVarCount = FreeVariablesIndex.size();
 
-        if (FreeVarCount == 0)
-        {
-            line_search_flag = false;
-            SubspaceMin = x_cauchy;
-            return;
-        }
-
-        ukfMatrixType WZ = ukfMatrixType::Zero(W.cols(), FreeVarCount);
-        for (unsigned i = 0; i < FreeVarCount; i++)
-            WZ.col(i) = W.row(FreeVariablesIndex[i]);
-        ukfVectorType rr = (g + theta * (x_cauchy - x) - W * (M * c));
-        // r=r(FreeVariables);
-        ukfMatrixType r = ukfMatrixType::Zero(FreeVarCount, 1);
-        for (unsigned i = 0; i < FreeVarCount; i++)
-            r.row(i) = rr.row(FreeVariablesIndex[i]);
-        // STEP 2: "v = w^T*Z*r" and STEP 3: "v = M*v"
-        ukfVectorType v = M * (WZ * r);
-        // STEP 4: N = 1/theta*W^T*Z*(W^T*Z)^T
-        ukfMatrixType N = theta_inverse * WZ * WZ.transpose();
-        // N = I - MN
-        N = ukfMatrixType::Identity(N.rows(), N.rows()) - M * N;
-        // STEP: 5
-        // v = N^{-1}*v
-
-        v = N.lu().solve(v);
-        // STEP: 6
-        // HERE IS A MISTAKE IN THE ORIGINAL PAPER!
-        ukfVectorType du = -theta_inverse * r - theta_inverse * theta_inverse * WZ.transpose() * v;
-
-        // STEP: 7
-        ukfPrecisionType alpha_star = FindAlpha(x_cauchy, du, FreeVariablesIndex);
-
-        // STEP: 8
-        ukfVectorType dStar = alpha_star * du;
-
-        SubspaceMin = x_cauchy;
-        for (unsigned i = 0; i < FreeVarCount; ++i)
-        {
-            SubspaceMin(FreeVariablesIndex[i]) = SubspaceMin(FreeVariablesIndex[i]) + dStar(i);
-        }
+        return step;
     }
 
-    bool isOptimal(ukfVectorType &x, ukfVectorType &g)
+    void JacobAdjust(ukfVectorType &x, ukfVectorType &output)
     {
-        ukfVectorType projGrad = x - g;
-
-        for (unsigned i = 0; i < x.size(); ++i)
-        {
-            if (projGrad(i) < lb(i))
-                projGrad(i) = lb(i);
-            else if (projGrad(i) > ub(i))
-                projGrad(i) = ub(i);
-        }
-
-        projGrad = projGrad - x;
-        bool opt = (projGrad.cwiseAbs()).maxCoeff() > tol;
-        return opt;
-    }
-
-    void JacobAdjust(ukfVectorType &x, ukfMatrixType &output)
-    {
-        const unsigned DIM = x.size();
-        output = ukfMatrixType::Identity(DIM, DIM);
-        ukfVectorType main = (x.array().exp() * (ub - lb).array() / (x.array().exp() + 1).pow(2));
-        output = main.asDiagonal();
+        output = (x.array().exp() * (ub - lb).array() / (x.array().exp() + 1).pow(2));
     }
 
     void transform(ukfVectorType &in, ukfVectorType &out)
@@ -883,7 +881,7 @@ public:
             {
                 out(i) = (lb(i) + EPS + (ub(i) - EPS) * std::exp(in(i))) / (1.0 + std::exp(in(i)));
 
-                if (!std::isfinite(in(i)))
+                if (!std::isfinite(out(i)))
                 {
                     out(i) = ub(i) - EPS;
                 }
@@ -904,7 +902,7 @@ public:
 
         // Gradient vector
         ukfVectorType g;
-        objFunc(x, g, true);
+        objFunc(x, g);
 
         double err = g.norm();
         if (err <= tol)
@@ -921,95 +919,102 @@ public:
 
         LineSearch(x_prev, g_prev, d);
 
-        // Declare and init matricies and vectors
-        ukfMatrixType yHistory = ukfMatrixType::Zero(DIM, 0);
-        ukfMatrixType sHistory = ukfMatrixType::Zero(DIM, 0);
-
-        ukfVectorType CauchyPoint = ukfVectorType::Zero(DIM);
-        ukfVectorType c = ukfVectorType::Zero(DIM);
-
-        ukfVectorType SubspaceMin;
-        ukfMatrixType H;
-
-        unsigned k = 0;
-        theta = 1.0;
-        W = ukfMatrixType::Zero(DIM, 0);
-        M = ukfMatrixType::Zero(0, 0);
-
-        while (isOptimal(x, g) && k < maxIter)
+        err = g.norm();
+        if (err <= tol)
         {
-            ukfVectorType x_old = x;
-            ukfVectorType g_old = g;
-
-            // STEP 2: compute the cauchy point by algorithm CP
-            GetGeneralizedCauchyPoint(x, g, CauchyPoint, c);
-
-            // STEP 3: compute a search direction d_k by the primal method
-            SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
-
-            // STEP 4: perform linesearch
-            LineSearch(x, SubspaceMin - x, f, g);
-
-            // STEP 5: compute gradient of the function
-            f = objFunc(x, g, true);
-
-            // prepare for next iteration
-            ukfVectorType newY = g - g_old;
-            ukfVectorType newS = x - x_old;
-
-            // STEP 6:
-            ukfPrecisionType skipping = std::abs(newS.dot(newY));
-
-            if (skipping < EPS)
-            {
-                k++;
-                continue;
-            }
-            if (k < m)
-            {
-                unsigned cols = yHistory.cols() + 1;
-                yHistory.conservativeResize(DIM, cols);
-                sHistory.conservativeResize(DIM, cols);
-            }
-            else
-            {
-                yHistory.leftCols(m - 1) = yHistory.rightCols(m - 1).eval();
-                sHistory.leftCols(m - 1) = sHistory.rightCols(m - 1).eval();
-            }
-
-            yHistory.rightCols(1) = newY;
-            sHistory.rightCols(1) = newS;
-
-            // STEP 7:
-            theta = (ukfPrecisionType)(newY.dot(newY)) / (newY.dot(newS));
-
-            W = ukfMatrixType::Zero(yHistory.rows(), yHistory.cols() + sHistory.cols());
-            W << yHistory, theta * sHistory;
-            ukfMatrixType A = sHistory.transpose() * yHistory;
-            ukfMatrixType L = A.triangularView<Eigen::StrictlyLower>();
-            ukfMatrixType MM(A.rows() + L.rows(), A.rows() + L.cols());
-            ukfMatrixType D = -1 * A.diagonal().asDiagonal();
-            MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
-            M = MM.inverse();
-
-            k++;
+            XOpt = x_prev;
+            return;
         }
 
-        invTransform(x, XOpt);
+        ukfVectorType s = x_prev - x;
+        ukfVectorType y = g_prev - g;
+
+        // Declare and init matricies and vectors
+        ukfMatrixType sHistory = ukfMatrixType::Zero(DIM, m);
+        ukfMatrixType yHistory = ukfMatrixType::Zero(DIM, m);
+
+        sHistory.col(0) = s;
+        yHistory.col(0) = y;
+
+        g = g_prev;
+
+        // Init loop variables
+        unsigned k = 0;
+        ukfPrecisionType rho = 0.0;
+        ukfPrecisionType beta = 0.0;
+        ukfVectorType r;
+
+        // Start loop
+        while (err > tol && k < maxIter)
+        {
+            k++;
+            //std::cout << "k " << k << std::endl;
+            unsigned M = std::min(k, m);
+            ukfVectorType alpha(M);
+
+            for (unsigned i = 0; i < M; ++i)
+            {
+                rho = 1.0 / yHistory.col(i).dot(sHistory.col(i));
+                alpha(i) = rho * sHistory.col(i).dot(g);
+
+                g -= alpha(i) * yHistory.col(i);
+            }
+
+            r = g * (sHistory.col(0).dot(yHistory.col(0))) / yHistory.col(0).dot(yHistory.col(0));
+
+            for (int i = M - 1; i >= 0; i--)
+            {
+                rho = 1.0 / yHistory.col(i).dot(sHistory.col(i));
+                beta = rho * yHistory.col(i).dot(r);
+
+                r += (alpha(i) - beta) * sHistory.col(i);
+            }
+
+            d = -r;
+            //std::cout << "x_prev before " << x_prev.transpose() << " d " << d.transpose() << " r " << r.transpose() << std::endl;
+            LineSearch(x_prev, g_prev, d);
+            //std::cout << "x_prev after " << x_prev.transpose() << std::endl;
+
+            // Stop searching minimum if L2-norm became less than user defined tolerance
+            err = g_prev.norm();
+            //std::cout << "g err " << err << std::endl;
+            if (err <= tol)
+                break;
+
+            s = x_prev - x;
+            y = g_prev - g;
+            std::cout << "s " << s.transpose() << std::endl;
+            //std::cout << "x " << x.transpose() << std::endl;
+
+            err = s.norm();
+            //std::cout << "s err " << err << std::endl;
+            //std::cout << "s " << s.transpose() << std::endl;
+
+            x = x_prev;
+            g = g_prev;
+
+            sHistory.rightCols(m - 1) = sHistory.leftCols(m - 2);
+            yHistory.rightCols(m - 1) = yHistory.leftCols(m - 2);
+
+            sHistory.col(0) = s;
+            yHistory.col(0) = y;
+        }
+
+        std::cout << "\nlast iter " << k << std::endl;
+
+        invTransform(x_prev, XOpt);
     }
 
 private:
     ukfPrecisionType tol;
     unsigned maxIter;
     unsigned m;
-    ukfPrecisionType theta;
     const stdVec_t &gradients;
     const ukfVectorType &b_vals;
     const mat33_t &m_D_iso;
     ukfPrecisionType _w_fast_diffusion;
     ukfPrecisionType wolfe1;
     ukfPrecisionType wolfe2;
-    bool line_search_flag;
 };
 
 #endif /* LBFGSB_H_ */
