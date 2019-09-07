@@ -873,7 +873,7 @@ public:
             {
                 out(i) = (lb(i) + EPS + (ub(i) - EPS) * std::exp(in(i))) / (1.0 + std::exp(in(i)));
 
-                if (!std::isfinite(in(i)))
+                if (!std::isfinite(out(i)))
                 {
                     out(i) = ub(i) - EPS;
                 }
@@ -973,12 +973,15 @@ public:
             MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
             M = MM.inverse();
 
+            std::cout << "f " << f << std::endl;
+
             if (std::fabs(f_old - f) < tol)
                 break;
 
             k++;
         }
 
+        std::cout << "last iter " << k << std::endl;
         invTransform(x, XOpt);
     }
 
