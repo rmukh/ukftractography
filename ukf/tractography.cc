@@ -1628,8 +1628,8 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
 
   //demo
   
-  cout << "demo \n";
-  state_temp << 706.154,  125.35, 494.308,  87.745, 706.154 , 125.35 ,494.308,  87.745, 706.154 , 125.35, 494.308 , 87.745  ,  0.05;
+  //cout << "demo \n";
+  //state_temp << 706.154,  125.35, 494.308,  87.745, 706.154 , 125.35 ,494.308,  87.745, 706.154 , 125.35, 494.308 , 87.745  ,  0.05;
 
   //cout << "before \n " << state_temp << endl;
   // init solver with bounds
@@ -1638,9 +1638,9 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   (*MySolver)._signal = signal;
   (*MySolver)._fixed_params = fixed_params;
   // solve the problem
-  cout << "\n before " << state_temp.transpose() << endl;
+  cout << "before " << state_temp.transpose() << endl;
   (*MySolver).Solve(state_temp);
-  cout << "\n after " << (*MySolver).XOpt.transpose() << endl;
+  cout << "after " << (*MySolver).XOpt.transpose() << endl << endl;
   //exit(0);
 
   //MySolver.XOpt;

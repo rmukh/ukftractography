@@ -68,10 +68,8 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-12), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
+        : lb(l), ub(u), tol(1e-12), maxIter(2000), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
     {
-        W = ukfMatrixType::Zero(l.rows(), 0);
-        M = ukfMatrixType::Zero(0, 0);
     }
 
     std::vector<int> sort_indexes(const std::vector<std::pair<int, ukfPrecisionType>> &v)
@@ -545,7 +543,7 @@ public:
         ukfPrecisionType dt = t - t_old;
 
         // examination of subsequent segments
-        while (dt_min >= dt && i < DIM)
+        while (dt_min > dt && i < DIM)
         {
             if (d(b) > 0)
                 x_cauchy(b) = ub(b);
@@ -565,7 +563,7 @@ public:
             f_doubleprime = std::max(EPS * f_primezero, f_doubleprime);
 
             p += gb * wbt.transpose();
-            d(b) = 0;
+            d(b) = 0.0;
             dt_min = -f_prime / f_doubleprime;
             t_old = t;
             ++i;
@@ -612,10 +610,10 @@ public:
 
     ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
     {
-        ukfPrecisionType c1 = 1e-3;
+        ukfPrecisionType c1 = 1e-4;
         ukfPrecisionType c2 = 0.9;
         unsigned i = 0;
-        unsigned max_iter = 20;
+        unsigned max_iter = 10;
         ukfPrecisionType dphi0 = g0.dot(p);
         ukfPrecisionType dphi = 0.0;
 
@@ -667,10 +665,10 @@ public:
     ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p)
     {
         // Init all necessary variables
-        ukfPrecisionType c1 = 1e-3;
+        ukfPrecisionType c1 = 1e-4;
         ukfPrecisionType c2 = 0.9;
         ukfPrecisionType alpha = 1.0;
-        ukfPrecisionType alpha_max = 2.5;
+        ukfPrecisionType alpha_max = 10.0;
         ukfPrecisionType alpha_im1 = 0.0;
         ukfPrecisionType alpha_i = 1.0;
         ukfPrecisionType f_im1 = f0;
@@ -678,7 +676,7 @@ public:
         ukfPrecisionType dphi0 = g0.dot(p);
         ukfPrecisionType dphi = 0.0;
         unsigned i = 0;
-        unsigned max_iter = 20;
+        unsigned max_iter = 10;
         ukfVectorType x;
         ukfVectorType g_i;
 
@@ -801,74 +799,11 @@ public:
         }
     }
 
-    bool isOptimal(ukfVectorType &x, ukfVectorType &g)
-    {
-        ukfVectorType projGrad = x - g;
-
-        for (unsigned i = 0; i < x.size(); ++i)
-        {
-            if (projGrad(i) < lb(i))
-                projGrad(i) = lb(i);
-            else if (projGrad(i) > ub(i))
-                projGrad(i) = ub(i);
-        }
-
-        projGrad = projGrad - x;
-        bool opt = (projGrad.cwiseAbs()).maxCoeff() > tol;
-        std::cout << " opt ";
-        return opt;
-    }
-
-    void JacobAdjust(ukfVectorType &x, ukfMatrixType &output)
-    {
-        const unsigned DIM = x.size();
-        output = ukfMatrixType::Identity(DIM, DIM);
-        ukfVectorType main = (x.array().exp() * (ub - lb).array() / (x.array().exp() + 1).pow(2));
-        output = main.asDiagonal();
-    }
-
-    void transform(ukfVectorType &x)
-    {
-        x = ((x - lb).array() + EPS).log() - ((ub - x).array() + EPS).log();
-    }
-
-    void invTransform(ukfVectorType &x)
-    {
-        const unsigned DIM = x.size();
-
-        for (unsigned i = 0; i < DIM; ++i)
-        {
-            if (!std::isfinite(x(i)))
-            {
-                if (std::isnan(x(i)))
-                {
-                    x(i) = (ub(i) - lb(i)) / 2.0;
-                }
-                else if (x(i) < 0.0)
-                {
-                    x(i) = lb(i) + EPS;
-                }
-                else
-                {
-                    x(i) = ub(i) - EPS;
-                }
-            }
-            else
-            {
-                x(i) = (lb(i) + EPS + (ub(i) - EPS) * std::exp(x(i))) / (1.0 + std::exp(x(i)));
-
-                if (!std::isfinite(x(i)))
-                {
-                    x(i) = ub(i) - EPS;
-                }
-            }
-        }
-    }
-
     void Solve(ukfVectorType &x0)
     {
         Assert(x0.rows() == lb.rows(), "lower bound size incorrect");
         Assert(x0.rows() == ub.rows(), "upper bound size incorrect");
+
         const unsigned DIM = x0.rows();
         XOpt.resize(x0.size());
 
@@ -883,11 +818,6 @@ public:
         ukfMatrixType H;
 
         ukfVectorType x = x0;
-        std::cout << "x before " << x.transpose() << std::endl;
-        transform(x);
-        std::cout << "x after " << x.transpose() << std::endl;
-        invTransform(x);
-        std::cout << "x inv " << x.transpose() << std::endl;
 
         ukfVectorType g;
         ukfPrecisionType f = functionValue(x);
@@ -895,34 +825,44 @@ public:
 
         unsigned k = 0;
         theta = 1.0;
-        W = ukfMatrixType::Zero(DIM, 0);
-        M = ukfMatrixType::Zero(0, 0);
+        ukfPrecisionType err = 1.0;
 
-        while (isOptimal(x, g) && k < maxIter)
+        W = ukfMatrixType::Zero(DIM, 1);
+        M = ukfMatrixType::Zero(1, 1);
+        ukfVectorType newY;
+        ukfVectorType newS;
+        
+        while (err > tol && k < maxIter)
         {
-            std::cout << "k ";
             double f_old = f;
             ukfVectorType x_old = x;
             ukfVectorType g_old = g;
 
             // STEP 2: compute the cauchy point by algorithm CP
             GetGeneralizedCauchyPoint(x, g, CauchyPoint, c);
-            std::cout << " GCP ";
-            // STEP 3: compute a search direction d_k by the primal method
+            if ((x.array() < 0).any())
+                std::cout << "k " << k << " x " << x.transpose() << std::endl;
 
+            // STEP 3: compute a search direction d_k by the primal method
             SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
-            std::cout << " SM ";
+
             // STEP 4: perform linesearch
             LineSearch(x, SubspaceMin - x, f, g);
-            std::cout << " LS ";
 
             // STEP 5: compute gradient of the function
             f = functionValue(x);
             functionGradientMSE(x, g);
 
+            //std::cout << "x " << x.transpose() << std::endl;
+
+            if (std::isnan(g.norm())) {
+                x = x_old;
+                break;
+            }
+
             // prepare for next iteration
-            ukfVectorType newY = g - g_old;
-            ukfVectorType newS = x - x_old;
+            newY = g - g_old;
+            newS = x - x_old;
 
             // STEP 6:
             ukfPrecisionType skipping = std::abs(newS.dot(newY));
@@ -935,24 +875,20 @@ public:
             if (k < m)
             {
                 unsigned cols = yHistory.cols() + 1;
-                std::cout << " cols " << cols << " ";
                 yHistory.conservativeResize(DIM, cols);
                 sHistory.conservativeResize(DIM, cols);
             }
             else
             {
-                yHistory.leftCols(m - 1) = yHistory.rightCols(m - 1).eval();
-                sHistory.leftCols(m - 1) = sHistory.rightCols(m - 1).eval();
+                yHistory.leftCols(m - 1) = yHistory.rightCols(m - 1);
+                sHistory.leftCols(m - 1) = sHistory.rightCols(m - 1);
             }
 
             yHistory.rightCols(1) = newY;
             sHistory.rightCols(1) = newS;
 
-            std::cout << " ys ";
-
             // STEP 7:
             theta = (ukfPrecisionType)(newY.dot(newY)) / (newY.dot(newS));
-            std::cout << " theta ";
 
             W = ukfMatrixType::Zero(yHistory.rows(), yHistory.cols() + sHistory.cols());
             W << yHistory, theta * sHistory;
@@ -962,9 +898,6 @@ public:
             ukfMatrixType D = -1 * A.diagonal().asDiagonal();
             MM << D, L.transpose(), L, ((sHistory.transpose() * sHistory) * theta);
             M = MM.inverse();
-
-            std::cout << " M inv "
-                      << " F old " << f_old << " f " << f << " diff " << f_old - f << std::endl;
 
             if (std::fabs(f_old - f) < tol)
                 break;
