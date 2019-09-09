@@ -365,7 +365,7 @@ public:
         for (unsigned it = 0; it < x_size; ++it)
         {
             // Optimal h is sqrt(epsilon machine) * x
-            double h = std::sqrt(2.2204e-16) * std::max(std::abs(x(it)), 1e-7);
+            double h = std::sqrt(2.2204e-16) * x(it); //std::max(std::abs(x(it)), 1e-7);
 
             // Volatile, otherwise compiler will optimize the value for dx
             volatile double xph = x(it) + h;
@@ -399,6 +399,7 @@ public:
 
         return functionValue(x_inv);
     }
+
     /* void functionGradientMSE(const ukfVectorType &x, ukfVectorType &grad)
     {
         // The size of the derivative is not set by default,
@@ -542,7 +543,7 @@ public:
             bound = false;
 
             theta = 3 * (f_best - f_step) / (step - st_best) + d_best + d_step;
-            s = sup_norm(theta, d_best, d_step); // sup norm
+            s = sup_norm(theta, d_best, d_step);
 
             gamma = s * std::sqrt(std::pow(theta / s, 2) - (d_best / s) * (d_step / s));
             if (step > st_best)
@@ -658,7 +659,6 @@ public:
         }
 
         // Actually perform update of the interval
-
         if (f_step > f_best)
         {
             st_other = step;
@@ -680,7 +680,6 @@ public:
         }
 
         // Compute new step
-
         step_f = std::min(step_max, step_f);
         step_f = std::max(step_min, step_f);
         step = step_f;
@@ -706,11 +705,11 @@ public:
     {
         // Reimplemented from MINPACK Fortran utility and Matlab's port of MINPACK
         ukfPrecisionType step = 1.0;
-        const unsigned iter_max = 1000;
+        const unsigned iter_max = 500;
 
         const ukfPrecisionType step_min = 0.0;
         const ukfPrecisionType step_max = 10.0;
-        const ukfPrecisionType x_tol = 1e-04;
+        const ukfPrecisionType x_tol = 1e-6;
 
         unsigned info = 0, infoc = 1;
         const ukfPrecisionType extra_delta = 4;
@@ -763,12 +762,10 @@ public:
 
             x = x_0 + step * dir;
             f_step = objFunc(x, grad);
-
             dgrad = grad.dot(dir);
             ukfPrecisionType armijo_check_val = f_init + step * dgrad_test;
 
             // check stop conditions
-
             if ((bracket && (step <= st_min || step >= st_max)) || infoc == 0)
             {
                 info = 6;
@@ -846,7 +843,7 @@ public:
 
     void JacobAdjust(ukfVectorType &x, ukfVectorType &output)
     {
-        output = (x.array().exp() * (ub - lb).array() / (x.array().exp() + 1).pow(2));
+        output = x.array().exp() * (ub - lb).array() / (x.array().exp() + 1).pow(2);
     }
 
     void transform(ukfVectorType &in, ukfVectorType &out)
@@ -930,8 +927,10 @@ public:
         ukfVectorType y = g_prev - g;
 
         // Declare and init matricies and vectors
-        ukfMatrixType sHistory = ukfMatrixType::Zero(DIM, m);
-        ukfMatrixType yHistory = ukfMatrixType::Zero(DIM, m);
+        ukfMatrixType sHistory;
+        sHistory.resize(DIM, m);
+        ukfMatrixType yHistory;
+        yHistory.resize(DIM, m);
 
         sHistory.col(0) = s;
         yHistory.col(0) = y;
@@ -948,9 +947,9 @@ public:
         while (err > tol && k < maxIter)
         {
             k++;
-            //std::cout << "k " << k << std::endl;
             unsigned M = std::min(k, m);
-            ukfVectorType alpha(M);
+            ukfVectorType alpha;
+            alpha.resize(M);
 
             for (unsigned i = 0; i < M; ++i)
             {
@@ -983,24 +982,22 @@ public:
 
             s = x_prev - x;
             y = g_prev - g;
-            std::cout << "s " << s.transpose() << std::endl;
+            //std::cout << "s " << s.transpose() << std::endl;
             //std::cout << "x " << x.transpose() << std::endl;
 
             err = s.norm();
-            //std::cout << "s err " << err << std::endl;
-            //std::cout << "s " << s.transpose() << std::endl;
 
             x = x_prev;
             g = g_prev;
 
-            sHistory.rightCols(m - 1) = sHistory.leftCols(m - 2);
-            yHistory.rightCols(m - 1) = yHistory.leftCols(m - 2);
+            sHistory.block(0, 1, DIM, m - 1) = sHistory.block(0, 0, DIM, m - 2);
+            yHistory.block(0, 1, DIM, m - 1) = yHistory.block(0, 0, DIM, m - 2);
 
             sHistory.col(0) = s;
             yHistory.col(0) = y;
         }
 
-        std::cout << "\nlast iter " << k << std::endl;
+        //std::cout << "\nlast iter " << k << std::endl;
 
         invTransform(x_prev, XOpt);
     }
