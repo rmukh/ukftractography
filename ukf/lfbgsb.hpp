@@ -68,7 +68,7 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-12), maxIter(2000), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
+        : lb(l), ub(u), tol(1e-12), maxIter(500), m(10), theta(1.0), gradients(grads), b_vals(b), m_D_iso(diso), _w_fast_diffusion(w_fast), line_search_flag(true)
     {
     }
 
@@ -513,13 +513,14 @@ public:
         x_cauchy = x;
         // p := 	W^T*p
         ukfVectorType p = W.transpose() * d; // (2mn operations)
+
         // c := 	0
         c = ukfVectorType::Zero(W.cols());
         // f' := 	g^T*d = -d^Td
         ukfPrecisionType f_prime = -d.dot(d); // (n operations)
         // f'' :=	\theta*d^T*d-d^T*W*M*W^T*d = -\theta*f' - p^T*M*p
         ukfPrecisionType f_doubleprime = (ukfPrecisionType)(-theta) * f_prime - p.dot(M * p); // (O(m^2) operations)
-        f_doubleprime = std::max(EPS, f_doubleprime);
+        //f_doubleprime = std::max(EPS, f_doubleprime);
         ukfPrecisionType f_primezero = -theta * f_prime;
         // \delta t_min :=	-f'/f''
         ukfPrecisionType dt_min = -f_prime / f_doubleprime;
@@ -530,7 +531,7 @@ public:
         for (unsigned j = 0; j < DIM; j++)
         {
             i = j;
-            if (SetOfT[SortedIndices[j]].second > 0)
+            if (SetOfT[SortedIndices[j]].first > 0)
                 break;
         }
 
@@ -556,13 +557,13 @@ public:
             c += dt * p;
 
             ukfVectorType wbt = W.row(b);
-
             ukfPrecisionType gb = g(b);
             f_prime += dt * f_doubleprime + gb * gb + theta * gb * zb - gb * wbt.transpose() * (M * c);
             f_doubleprime += -theta * gb * gb - 2.0 * (gb * (wbt.dot(M * p))) - gb * gb * wbt.transpose() * (M * wbt);
             f_doubleprime = std::max(EPS * f_primezero, f_doubleprime);
 
-            p += gb * wbt.transpose();
+            p += gb * wbt;
+
             d(b) = 0.0;
             dt_min = -f_prime / f_doubleprime;
             t_old = t;
@@ -578,7 +579,7 @@ public:
         dt_min = std::max(dt_min, 0.0);
         t_old += dt_min;
 
-        for (unsigned ii = i; ii < x_cauchy.rows(); ++ii)
+        for (unsigned ii = i; ii < x_cauchy.size(); ++ii)
         {
             x_cauchy(SortedIndices[ii]) = x(SortedIndices[ii]) + t_old * d(SortedIndices[ii]);
         }
@@ -596,6 +597,7 @@ public:
          * this returns
 		 * a* = max {a : a <= 1 and  l_i-xc_i <= a*d_i <= u_i-xc_i}
 		 */
+
         ukfPrecisionType alphastar = 1;
         const unsigned int n = FreeVariables.size();
         for (unsigned int i = 0; i < n; ++i)
@@ -608,12 +610,12 @@ public:
         return alphastar;
     }
 
-    ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
+    ukfPrecisionType zoomAlpha(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, ukfVectorType &p, ukfPrecisionType alpha_lo, ukfPrecisionType alpha_hi)
     {
         ukfPrecisionType c1 = 1e-4;
         ukfPrecisionType c2 = 0.9;
         unsigned i = 0;
-        unsigned max_iter = 10;
+        unsigned max_iter = 20;
         ukfPrecisionType dphi0 = g0.dot(p);
         ukfPrecisionType dphi = 0.0;
 
@@ -631,7 +633,6 @@ public:
             alpha = alpha_i;
             x = x0 + alpha_i * p;
             f_i = functionValue(x);
-
             functionGradientMSE(x, g_i);
             x_lo = x0 + alpha_lo * p;
             f_lo = functionValue(x_lo);
@@ -662,13 +663,13 @@ public:
         return alpha;
     }
 
-    ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, const ukfVectorType &p)
+    ukfPrecisionType strongWolfeConditions(ukfVectorType &x0, ukfPrecisionType f0, ukfVectorType &g0, ukfVectorType &p)
     {
         // Init all necessary variables
         ukfPrecisionType c1 = 1e-4;
         ukfPrecisionType c2 = 0.9;
         ukfPrecisionType alpha = 1.0;
-        ukfPrecisionType alpha_max = 10.0;
+        ukfPrecisionType alpha_max = 2.5;
         ukfPrecisionType alpha_im1 = 0.0;
         ukfPrecisionType alpha_i = 1.0;
         ukfPrecisionType f_im1 = f0;
@@ -676,7 +677,7 @@ public:
         ukfPrecisionType dphi0 = g0.dot(p);
         ukfPrecisionType dphi = 0.0;
         unsigned i = 0;
-        unsigned max_iter = 10;
+        unsigned max_iter = 20;
         ukfVectorType x;
         ukfVectorType g_i;
 
@@ -831,7 +832,7 @@ public:
         M = ukfMatrixType::Zero(1, 1);
         ukfVectorType newY;
         ukfVectorType newS;
-        
+
         while (err > tol && k < maxIter)
         {
             double f_old = f;
@@ -840,8 +841,8 @@ public:
 
             // STEP 2: compute the cauchy point by algorithm CP
             GetGeneralizedCauchyPoint(x, g, CauchyPoint, c);
-            if ((x.array() < 0).any())
-                std::cout << "k " << k << " x " << x.transpose() << std::endl;
+            //if ((x.array() < 0).any())
+            //   std::cout << "k " << k << " x " << x.transpose() << std::endl;
 
             // STEP 3: compute a search direction d_k by the primal method
             SubspaceMinimization(CauchyPoint, x, c, g, SubspaceMin);
@@ -853,16 +854,21 @@ public:
             f = functionValue(x);
             functionGradientMSE(x, g);
 
-            //std::cout << "x " << x.transpose() << std::endl;
-
-            if (std::isnan(g.norm())) {
-                x = x_old;
+            err = g.norm();
+            if (err <= tol)
+            {
                 break;
             }
 
             // prepare for next iteration
             newY = g - g_old;
             newS = x - x_old;
+
+            err = newS.norm();
+            if (std::isnan(err)) {
+                x = x_old;
+                break;
+            }
 
             // STEP 6:
             ukfPrecisionType skipping = std::abs(newS.dot(newY));
