@@ -395,6 +395,7 @@ public:
 
         functionGradientMSE(x_inv, vals_grad);
         JacobAdjust(x, jacobian);
+        std::cout << "jacobian " << jacobian.transpose() << std::endl;
         grad = jacobian.array() * vals_grad.array();
 
         return functionValue(x_inv);
@@ -705,11 +706,11 @@ public:
     {
         // Reimplemented from MINPACK Fortran utility and Matlab's port of MINPACK
         ukfPrecisionType step = 1.0;
-        const unsigned iter_max = 500;
+        const unsigned iter_max = 100;
 
         const ukfPrecisionType step_min = 0.0;
         const ukfPrecisionType step_max = 10.0;
-        const ukfPrecisionType x_tol = 1e-6;
+        const ukfPrecisionType x_tol = 1e-4;
 
         unsigned info = 0, infoc = 1;
         const ukfPrecisionType extra_delta = 4;
@@ -970,7 +971,7 @@ public:
             }
 
             d = -r;
-            //std::cout << "x_prev before " << x_prev.transpose() << " d " << d.transpose() << " r " << r.transpose() << std::endl;
+
             LineSearch(x_prev, g_prev, d);
             //std::cout << "x_prev after " << x_prev.transpose() << std::endl;
 
@@ -990,8 +991,8 @@ public:
             x = x_prev;
             g = g_prev;
 
-            sHistory.block(0, 1, DIM, m - 1) = sHistory.block(0, 0, DIM, m - 2);
-            yHistory.block(0, 1, DIM, m - 1) = yHistory.block(0, 0, DIM, m - 2);
+            sHistory.rightCols(m - 1) = sHistory.leftCols(m - 2).eval();
+            yHistory.rightCols(m - 1) = yHistory.leftCols(m - 2).eval();
 
             sHistory.col(0) = s;
             yHistory.col(0) = y;
