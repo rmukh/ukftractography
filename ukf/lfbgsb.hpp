@@ -375,10 +375,13 @@ public:
             double dx = xph - x(it);
 
             // Compute the slope
-            p_h[it] = xph;
+            p_h(it) = xph;
 
             //p_hh[it] = parameters[it] - h;
             grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
+            if (grad(it) != 0) {
+                std::cout << "dx " << dx << " " << functionValue(p_h) << " " << functionValue(p_hh) << " " << p_h(it) << " " << p_hh(it) << std::endl;
+            }
 
             // Set parameters back for next iteration
             p_h(it) = x(it);
