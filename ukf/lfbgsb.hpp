@@ -292,13 +292,14 @@ public:
         // slope = [f(x+h) - f(x-h)] / (2h)
 
         unsigned int x_size = x.size();
+
         ukfVectorType p_h(x_size);  // for f(x+h)
         ukfVectorType p_hh(x_size); // for f(x-h)
 
         // The size of the derivative is not set by default,
         // so we have to do it manually
         grad.conservativeResize(x_size);
-
+        
         // Set parameters
         p_h = x;
         p_hh = x;
@@ -396,6 +397,7 @@ public:
         functionGradientMSE(x_inv, vals_grad);
         JacobAdjust(x, jacobian);
         std::cout << "jacobian " << jacobian.transpose() << std::endl;
+        std::cout << "vals_grad " << vals_grad.transpose() << std::endl;
         grad = jacobian.array() * vals_grad.array();
 
         return functionValue(x_inv);
