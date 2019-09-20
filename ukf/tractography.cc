@@ -1626,18 +1626,12 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   //upperBound[15] = 1.0;
   upperBound[12] = 1.0;
 
-  //demo
-  //cout << "demo \n";
-  //state_temp << 706.154,  125.35, 494.308,  87.745, 706.154 , 125.35 ,494.308,  87.745, 706.154 , 125.35, 494.308 , 87.745  ,  0.05;
-
-  //cout << "before \n " << state_temp << endl;
   // init solver with bounds
   std::auto_ptr<LFBGSB> MySolver(new LFBGSB(lowerBound, upperBound, _signal_data->gradients(), _signal_data->GetBValues(), SetIdentityScaled(D_ISO), 0.7));
 
   (*MySolver)._signal = signal;
   (*MySolver)._fixed_params = fixed_params;
-  // solve the problem
-  //cout << "before " << state_temp.transpose() << endl;
+  // Run solver
   (*MySolver).Solve(state_temp);
   cout << "" << (*MySolver).XOpt.transpose() << endl << endl;
   //exit(0);
