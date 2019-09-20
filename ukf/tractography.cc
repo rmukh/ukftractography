@@ -1058,7 +1058,7 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
     // Estimate the initial state
     //InitLoopUKF(state, p, signal_values[i], dNormMSE);
     //mtx.Lock();
-    NonLinearLeastSquareOptimization(thread_id, state, signal_values, _model);
+    NonLinearLeastSquareOptimization(thread_id, state, signal_values);
     //mtx.Unlock();
 
     // Output of the filter
@@ -1555,7 +1555,7 @@ void Tractography::PrintState(State &state)
   std::cout << " --- " << std::endl;
 }
 
-void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &state, const ukfVectorType &signal, FilterModel *model)
+void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &state, const ukfVectorType &signal)
 {
   // Fill in array of parameters we are not intented to optimized
   // We still need to pass this parameters to optimizer because we need to compute
@@ -1627,7 +1627,7 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   upperBound[12] = 1.0;
 
   // init solver with bounds
-  std::auto_ptr<LFBGSB> MySolver(new LFBGSB(lowerBound, upperBound, _signal_data->gradients(), _signal_data->GetBValues(), SetIdentityScaled(D_ISO), 0.7));
+  std::auto_ptr<LFBGSB> MySolver(new LFBGSB(lowerBound, upperBound, _model));
 
   (*MySolver)._signal = signal;
   (*MySolver)._fixed_params = fixed_params;

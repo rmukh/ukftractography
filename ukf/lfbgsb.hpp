@@ -38,6 +38,7 @@
 
 #include "ukf_types.h"
 #include "linalg.h"
+#include "filter_model.h"
 
 #include <stdexcept>
 #include <cmath>
@@ -56,6 +57,8 @@
         throw(std::runtime_error(m)); \
     }
 
+class FilterModel;
+
 class LFBGSB
 {
     ukfVectorType lb, ub;
@@ -67,9 +70,8 @@ public:
     ukfVectorType _signal;
     const ukfPrecisionType EPS = 2.2204e-16;
 
-    LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
-        : lb(l), ub(u), tol(1e-12), maxIter(2000), m(10), gradients(grads), b_vals(b), m_D_iso(diso),
-          _w_fast_diffusion(w_fast), wolfe1(1e-04), wolfe2(0.9)
+    LFBGSB(const ukfVectorType &l, const ukfVectorType &u, FilterModel *model)
+        : lb(l), ub(u), tol(1e-12), maxIter(2000), m(10), wolfe1(1e-04), wolfe2(0.9), local_model(model)
     {
     }
 
@@ -82,94 +84,7 @@ public:
         return idx;
     }
 
-    void H(const ukfVectorType &X, ukfVectorType &Y)
-    {
-        // Normalize directions.
-        vec3_t m1;
-        initNormalized(m1, X(0), X(1), X(2));
-        vec3_t m2;
-        initNormalized(m2, X(7), X(8), X(9));
-        vec3_t m3;
-        initNormalized(m3, X(14), X(15), X(16));
-
-        // Tensor 1 lambdas
-        ukfPrecisionType l11 = X(3);
-        ukfPrecisionType l12 = X(4);
-        ukfPrecisionType l13 = X(5);
-        ukfPrecisionType l14 = X(6);
-
-        // Tensor 2 lambdas
-        ukfPrecisionType l21 = X(10);
-        ukfPrecisionType l22 = X(11);
-        ukfPrecisionType l23 = X(12);
-        ukfPrecisionType l24 = X(13);
-
-        // Tensor 3 lambdas
-        ukfPrecisionType l31 = X(17);
-        ukfPrecisionType l32 = X(18);
-        ukfPrecisionType l33 = X(19);
-        ukfPrecisionType l34 = X(20);
-
-        // Get compartments weights
-        const ukfPrecisionType w1 = X(21);
-        const ukfPrecisionType w2 = X(22);
-        const ukfPrecisionType w3 = X(23);
-
-        // Get free water weight from state
-        const ukfPrecisionType w = X(24);
-
-        // Fill in lambdas matricies
-        diagmat3_t lambdas11, lambdas12, lambdas21, lambdas22, lambdas31, lambdas32;
-        lambdas11.diagonal()[0] = l11;
-        lambdas11.diagonal()[1] = l12;
-        lambdas11.diagonal()[2] = l12;
-
-        lambdas12.diagonal()[0] = l13;
-        lambdas12.diagonal()[1] = l14;
-        lambdas12.diagonal()[2] = l14;
-
-        lambdas21.diagonal()[0] = l21;
-        lambdas21.diagonal()[1] = l22;
-        lambdas21.diagonal()[2] = l22;
-
-        lambdas22.diagonal()[0] = l23;
-        lambdas22.diagonal()[1] = l24;
-        lambdas22.diagonal()[2] = l24;
-
-        lambdas31.diagonal()[0] = l31;
-        lambdas31.diagonal()[1] = l32;
-        lambdas31.diagonal()[2] = l32;
-
-        lambdas32.diagonal()[0] = l33;
-        lambdas32.diagonal()[1] = l34;
-        lambdas32.diagonal()[2] = l34;
-
-        // Calculate diffusion matrix.
-        const mat33_t &D1 = diffusion(m1, lambdas11);
-        const mat33_t &D1t = diffusion(m1, lambdas12);
-        const mat33_t &D2 = diffusion(m2, lambdas21);
-        const mat33_t &D2t = diffusion(m2, lambdas22);
-        const mat33_t &D3 = diffusion(m3, lambdas31);
-        const mat33_t &D3t = diffusion(m3, lambdas32);
-
-        ukfPrecisionType _w_slow_diffusion = 1.0 - _w_fast_diffusion;
-        ukfPrecisionType _not_w = 1.0 - w;
-
-        // Reconstruct signal by the means of the model
-        for (int j = 0; j < _signal.size(); ++j)
-        {
-            // u = gradient direction considered
-            const vec3_t &u = gradients[j];
-
-            Y(j) =
-                _not_w * (w1 * (_w_fast_diffusion * std::exp(-b_vals[j] * u.dot(D1 * u)) + _w_slow_diffusion * std::exp(-b_vals[j] * u.dot(D1t * u))) +
-                          w2 * (_w_fast_diffusion * std::exp(-b_vals[j] * u.dot(D2 * u)) + _w_slow_diffusion * std::exp(-b_vals[j] * u.dot(D2t * u))) +
-                          w3 * (_w_fast_diffusion * std::exp(-b_vals[j] * u.dot(D3 * u)) + _w_slow_diffusion * std::exp(-b_vals[j] * u.dot(D3t * u)))) +
-                w * std::exp(-b_vals[j] * u.dot(m_D_iso * u));
-        }
-    }
-
-    void computeError(const ukfVectorType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
+    void computeError(const ukfMatrixType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
     {
         ukfPrecisionType sum = 0.0;
         ukfPrecisionType norm_sq_signal = 0.0;
@@ -256,9 +171,9 @@ public:
         }
 
         // Estimate the signal
-        ukfVectorType estimatedSignal(_signal.size());
+        ukfMatrixType estimatedSignal(_signal.size(),1);
 
-        H(localState, estimatedSignal);
+        local_model->H(localState, estimatedSignal);
 
         // Compute the error between the estimated signal and the acquired one
         ukfPrecisionType err = 0.0;
@@ -994,12 +909,9 @@ private:
     ukfPrecisionType tol;
     unsigned maxIter;
     unsigned m;
-    const stdVec_t &gradients;
-    const ukfVectorType &b_vals;
-    const mat33_t &m_D_iso;
-    ukfPrecisionType _w_fast_diffusion;
     ukfPrecisionType wolfe1;
     ukfPrecisionType wolfe2;
+    const FilterModel * const local_model;
 };
 
 #endif /* LBFGSB_H_ */
