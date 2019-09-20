@@ -169,22 +169,6 @@ public:
         }
     }
 
-    /* void computeError(const ukfVectorType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
-    {
-        ukfPrecisionType sum = 0.0;
-        ukfPrecisionType norm_sq_signal = 0.0;
-        unsigned int N = signal.size() / 2;
-
-        for (unsigned int i = 0; i < N; ++i)
-        {
-            ukfPrecisionType diff = signal[i] - signal_estimate(i, 0);
-            sum += diff * diff;
-            norm_sq_signal += signal[i] * signal[i];
-        }
-
-        err = sum / norm_sq_signal;
-    } */
-
     void computeError(const ukfVectorType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
     {
         ukfPrecisionType sum = 0.0;
@@ -366,7 +350,7 @@ public:
         for (unsigned it = 0; it < x_size; ++it)
         {
             // Optimal h is sqrt(epsilon machine) * x
-            double h = std::sqrt(2.2204e-16) * x(it); //std::max(std::abs(x(it)), 1e-7);
+            double h = std::sqrt(2.2204e-16) * std::max(std::abs(x(it)), 1e-7);
 
             // Volatile, otherwise compiler will optimize the value for dx
             volatile double xph = x(it) + h;
@@ -379,9 +363,6 @@ public:
 
             //p_hh[it] = parameters[it] - h;
             grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
-            //if (grad(it) != 0) {
-            //    std::cout << "dx " << dx << " " << functionValue(p_h) << " " << functionValue(p_hh) << " " << p_h(it) << " " << p_hh(it) << std::endl;
-            //}
 
             // Set parameters back for next iteration
             p_h(it) = x(it);
@@ -399,8 +380,7 @@ public:
 
         functionGradientMSE(x_inv, vals_grad);
         JacobAdjust(x, jacobian);
-        //std::cout << "jacobian " << jacobian.transpose() << std::endl;
-        //std::cout << "vals_grad " << vals_grad.transpose() << std::endl;
+     
         grad = jacobian.array() * vals_grad.array();
 
         return functionValue(x_inv);
@@ -980,24 +960,22 @@ public:
             d = -r;
 
             LineSearch(x_prev, g_prev, d);
-            //std::cout << "x_prev after " << x_prev.transpose() << std::endl;
-
+            
             // Stop searching minimum if L2-norm became less than user defined tolerance
             err = g_prev.norm();
-            //std::cout << "g err " << err << std::endl;
+
             if (err <= tol)
                 break;
 
-            s = x_prev - x;
-            y = g_prev - g;
-            //std::cout << "s " << s.transpose() << std::endl;
-            //std::cout << "x " << x.transpose() << std::endl;
-
-            err = s.norm();
             if (g_prev.array().isNaN().any()) {
                 x_prev = x;
                 break;
             }
+
+            s = x_prev - x;
+            y = g_prev - g;
+
+            err = s.norm();
 
             x = x_prev;
             g = g_prev;
@@ -1008,8 +986,6 @@ public:
             sHistory.col(0) = s;
             yHistory.col(0) = y;
         }
-
-        //std::cout << "\nlast iter " << k << std::endl;
 
         invTransform(x_prev, XOpt);
     }
