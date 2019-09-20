@@ -69,7 +69,7 @@ public:
 
     LFBGSB(const ukfVectorType &l, const ukfVectorType &u, const stdVec_t &grads, const ukfVectorType &b, const mat33_t &diso, ukfPrecisionType w_fast)
         : lb(l), ub(u), tol(1e-12), maxIter(2000), m(10), gradients(grads), b_vals(b), m_D_iso(diso),
-          _w_fast_diffusion(w_fast), wolfe1(1e-03), wolfe2(0.9)
+          _w_fast_diffusion(w_fast), wolfe1(1e-04), wolfe2(0.9)
     {
     }
 
@@ -379,9 +379,9 @@ public:
 
             //p_hh[it] = parameters[it] - h;
             grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
-            if (grad(it) != 0) {
-                std::cout << "dx " << dx << " " << functionValue(p_h) << " " << functionValue(p_hh) << " " << p_h(it) << " " << p_hh(it) << std::endl;
-            }
+            //if (grad(it) != 0) {
+            //    std::cout << "dx " << dx << " " << functionValue(p_h) << " " << functionValue(p_hh) << " " << p_h(it) << " " << p_hh(it) << std::endl;
+            //}
 
             // Set parameters back for next iteration
             p_h(it) = x(it);
@@ -399,8 +399,8 @@ public:
 
         functionGradientMSE(x_inv, vals_grad);
         JacobAdjust(x, jacobian);
-        std::cout << "jacobian " << jacobian.transpose() << std::endl;
-        std::cout << "vals_grad " << vals_grad.transpose() << std::endl;
+        //std::cout << "jacobian " << jacobian.transpose() << std::endl;
+        //std::cout << "vals_grad " << vals_grad.transpose() << std::endl;
         grad = jacobian.array() * vals_grad.array();
 
         return functionValue(x_inv);
@@ -892,6 +892,30 @@ public:
         }
     }
 
+    void step(const ukfVectorType& g, ukfMatrixType& s_mat, ukfMatrixType& y_mat, const unsigned M, ukfVectorType& r) {
+            ukfVectorType q(g);
+            ukfVectorType alpha;
+            alpha.resize(M);
+
+            for (unsigned i = 0; i < M; i++)
+            {
+                ukfPrecisionType rho = 1.0 / y_mat.col(i).dot(s_mat.col(i));
+                alpha(i) = rho * s_mat.col(i).dot(q);
+
+                q -= alpha(i) * y_mat.col(i);
+            }
+
+            r = q * (s_mat.col(0).dot(y_mat.col(0))) / y_mat.col(0).dot(y_mat.col(0));
+
+            for (int i = M - 1; i >= 0; i--)
+            {
+                ukfPrecisionType rho = 1.0 / y_mat.col(i).dot(s_mat.col(i));
+                ukfPrecisionType beta = rho * y_mat.col(i).dot(r);
+
+                r += (alpha(i) - beta) * s_mat.col(i);
+            }
+    }
+
     void Solve(ukfVectorType &x0)
     {
         Assert(x0.rows() == lb.rows(), "lower bound size incorrect");
@@ -945,36 +969,14 @@ public:
 
         // Init loop variables
         unsigned k = 0;
-        ukfPrecisionType rho = 0.0;
-        ukfPrecisionType beta = 0.0;
         ukfVectorType r;
 
         // Start loop
         while (err > tol && k < maxIter)
         {
             k++;
-            unsigned M = std::min(k, m);
-            ukfVectorType alpha;
-            alpha.resize(M);
 
-            for (unsigned i = 0; i < M; ++i)
-            {
-                rho = 1.0 / yHistory.col(i).dot(sHistory.col(i));
-                alpha(i) = rho * sHistory.col(i).dot(g);
-
-                g -= alpha(i) * yHistory.col(i);
-            }
-
-            r = g * (sHistory.col(0).dot(yHistory.col(0))) / yHistory.col(0).dot(yHistory.col(0));
-
-            for (int i = M - 1; i >= 0; i--)
-            {
-                rho = 1.0 / yHistory.col(i).dot(sHistory.col(i));
-                beta = rho * yHistory.col(i).dot(r);
-
-                r += (alpha(i) - beta) * sHistory.col(i);
-            }
-
+            step(g, sHistory,yHistory, std::min(k, m), r);
             d = -r;
 
             LineSearch(x_prev, g_prev, d);
@@ -992,6 +994,10 @@ public:
             //std::cout << "x " << x.transpose() << std::endl;
 
             err = s.norm();
+            if (g_prev.array().isNaN().any()) {
+                x_prev = x;
+                break;
+            }
 
             x = x_prev;
             g = g_prev;
