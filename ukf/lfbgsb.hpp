@@ -61,7 +61,6 @@ class FilterModel;
 
 class LFBGSB
 {
-    ukfVectorType lb, ub;
 
 public:
     ukfVectorType XOpt;
@@ -69,10 +68,45 @@ public:
     ukfVectorType _fixed_params;
     ukfVectorType _signal;
     const ukfPrecisionType EPS = 2.2204e-16;
+    ukfVectorType lb, ub;
 
-    LFBGSB(const ukfVectorType &l, const ukfVectorType &u, FilterModel *model)
-        : lb(l), ub(u), tol(1e-12), maxIter(2000), m(10), wolfe1(1e-04), wolfe2(0.9), local_model(model)
+    LFBGSB(FilterModel *model)
+        : tol(1e-12), maxIter(2000), m(10), wolfe1(1e-04), wolfe2(0.9), local_model(model)
     {
+        lb.resize(13);
+        ub.resize(13);
+        // Lower bound
+        // First bi-exponential parameters
+        lb[0] = lb[1] = 1.0;
+        lb[2] = lb[3] = 0.1;
+
+        // Second bi-exponential
+        lb[4] = lb[5] = 1.0;
+        lb[6] = lb[7] = 0.1;
+
+        // Third bi-exponential
+        lb[8] = lb[9] = 1.0;
+        lb[10] = lb[11] = 0.1;
+
+        // w1 & w2 & w3 in [0,1]
+        //lb[12] = lb[13] = lb[14] = 0.0;
+        // free water between 0 and 1
+        //lb[15] = 0.0;
+        lb[12] = 0.0;
+
+        // Upper bound
+        // First bi-exponential
+        ub[0] = ub[1] = ub[2] = ub[3] = 3000.0;
+
+        // Second bi-exponential
+        ub[4] = ub[5] = ub[6] = ub[7] = 3000.0;
+
+        // Third bi-exponential
+        ub[8] = ub[9] = ub[10] = ub[11] = 3000.0;
+
+        //ub[12] = ub[13] = ub[14] = 1.0;
+        //ub[15] = 1.0;
+        ub[12] = 1.0;
     }
 
     std::vector<int> sort_indexes(const std::vector<std::pair<int, ukfPrecisionType>> &v)
@@ -171,7 +205,7 @@ public:
         }
 
         // Estimate the signal
-        ukfMatrixType estimatedSignal(_signal.size(),1);
+        ukfMatrixType estimatedSignal(_signal.size(), 1);
 
         local_model->H(localState, estimatedSignal);
 
@@ -198,7 +232,7 @@ public:
         // The size of the derivative is not set by default,
         // so we have to do it manually
         grad.conservativeResize(x_size);
-        
+
         // Set parameters
         p_h = x;
         p_hh = x;
@@ -295,7 +329,7 @@ public:
 
         functionGradientMSE(x_inv, vals_grad);
         JacobAdjust(x, jacobian);
-     
+
         grad = jacobian.array() * vals_grad.array();
 
         return functionValue(x_inv);
@@ -787,28 +821,29 @@ public:
         }
     }
 
-    void step(const ukfVectorType& g, ukfMatrixType& s_mat, ukfMatrixType& y_mat, const unsigned M, ukfVectorType& r) {
-            ukfVectorType q(g);
-            ukfVectorType alpha;
-            alpha.resize(M);
+    void step(const ukfVectorType &g, ukfMatrixType &s_mat, ukfMatrixType &y_mat, const unsigned M, ukfVectorType &r)
+    {
+        ukfVectorType q(g);
+        ukfVectorType alpha;
+        alpha.resize(M);
 
-            for (unsigned i = 0; i < M; i++)
-            {
-                ukfPrecisionType rho = 1.0 / y_mat.col(i).dot(s_mat.col(i));
-                alpha(i) = rho * s_mat.col(i).dot(q);
+        for (unsigned i = 0; i < M; i++)
+        {
+            ukfPrecisionType rho = 1.0 / y_mat.col(i).dot(s_mat.col(i));
+            alpha(i) = rho * s_mat.col(i).dot(q);
 
-                q -= alpha(i) * y_mat.col(i);
-            }
+            q -= alpha(i) * y_mat.col(i);
+        }
 
-            r = q * (s_mat.col(0).dot(y_mat.col(0))) / y_mat.col(0).dot(y_mat.col(0));
+        r = q * (s_mat.col(0).dot(y_mat.col(0))) / y_mat.col(0).dot(y_mat.col(0));
 
-            for (int i = M - 1; i >= 0; i--)
-            {
-                ukfPrecisionType rho = 1.0 / y_mat.col(i).dot(s_mat.col(i));
-                ukfPrecisionType beta = rho * y_mat.col(i).dot(r);
+        for (int i = M - 1; i >= 0; i--)
+        {
+            ukfPrecisionType rho = 1.0 / y_mat.col(i).dot(s_mat.col(i));
+            ukfPrecisionType beta = rho * y_mat.col(i).dot(r);
 
-                r += (alpha(i) - beta) * s_mat.col(i);
-            }
+            r += (alpha(i) - beta) * s_mat.col(i);
+        }
     }
 
     void Solve(ukfVectorType &x0)
@@ -871,18 +906,19 @@ public:
         {
             k++;
 
-            step(g, sHistory,yHistory, std::min(k, m), r);
+            step(g, sHistory, yHistory, std::min(k, m), r);
             d = -r;
 
             LineSearch(x_prev, g_prev, d);
-            
+
             // Stop searching minimum if L2-norm became less than user defined tolerance
             err = g_prev.norm();
 
             if (err <= tol)
                 break;
 
-            if (g_prev.array().isNaN().any()) {
+            if (g_prev.array().isNaN().any())
+            {
                 x_prev = x;
                 break;
             }
@@ -911,7 +947,7 @@ private:
     unsigned m;
     ukfPrecisionType wolfe1;
     ukfPrecisionType wolfe2;
-    const FilterModel * const local_model;
+    const FilterModel *const local_model;
 };
 
 #endif /* LBFGSB_H_ */

@@ -709,47 +709,12 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
   seed_infos2.reserve(6 * starting_points.size());
   const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
   assert(num_of_threads > 0);
-  //const int num_of_threads = 1;
-  // Pack information for each seed point.
+
+  // Create separate model for each thread
   _lbfgsb.reserve(num_of_threads); //Allocate, but do not assign
-  // init predefined constants
-  ukfVectorType lowerBound(13), upperBound(13);
-  // Lower bound
-  // First bi-exponential parameters
-  lowerBound[0] = lowerBound[1] = 1.0;
-  lowerBound[2] = lowerBound[3] = 0.1;
-
-  // Second bi-exponential
-  lowerBound[4] = lowerBound[5] = 1.0;
-  lowerBound[6] = lowerBound[7] = 0.1;
-
-  // Third bi-exponential
-  lowerBound[8] = lowerBound[9] = 1.0;
-  lowerBound[10] = lowerBound[11] = 0.1;
-
-  // w1 & w2 & w3 in [0,1]
-  //lowerBound[12] = lowerBound[13] = lowerBound[14] = 0.0;
-  // free water between 0 and 1
-  //lowerBound[15] = 0.0;
-  lowerBound[12] = 0.0;
-
-  // Upper bound
-  // First bi-exponential
-  upperBound[0] = upperBound[1] = upperBound[2] = upperBound[3] = 3000.0;
-
-  // Second bi-exponential
-  upperBound[4] = upperBound[5] = upperBound[6] = upperBound[7] = 3000.0;
-
-  // Third bi-exponential
-  upperBound[8] = upperBound[9] = upperBound[10] = upperBound[11] = 3000.0;
-
-  //upperBound[12] = upperBound[13] = upperBound[14] = 1.0;
-  //upperBound[15] = 1.0;
-  upperBound[12] = 1.0;
-
   for (int i = 0; i < num_of_threads; i++)
   {
-    _lbfgsb.push_back(new LFBGSB(lowerBound, upperBound, _model));
+    _lbfgsb.push_back(new LFBGSB(_model));
   }
 
   std::cout << "Processing " << starting_points.size() << " starting points with " << _lbfgsb.size() << " threads" << std::endl;
