@@ -423,6 +423,7 @@ private:
   ukfPrecisionType max_odf_thresh;
 
   itk::SimpleMutexLock mtx;
+  std::vector<LFBGSB *> _lbfgsb;
 };
 
 #endif // TRACTOGRAPHY_H_

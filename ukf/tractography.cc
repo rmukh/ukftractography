@@ -121,7 +121,8 @@ Tractography::Tractography(UKFSettings s) :
                                             sph_J(2),
                                             fista_lambda(0.01),
                                             lvl(4),
-                                            max_odf_thresh(0.7)
+                                            max_odf_thresh(0.7),
+                                            _lbfgsb(0, NULL)
 // end initializer list
 {
 }
@@ -706,11 +707,52 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
 
   std::vector<SeedPointInfo> seed_infos2;
   seed_infos2.reserve(6 * starting_points.size());
-  //const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
-  //assert(num_of_threads > 0);
-  const int num_of_threads = 1;
+  const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
+  assert(num_of_threads > 0);
+  //const int num_of_threads = 1;
   // Pack information for each seed point.
-  std::cout << "Processing " << starting_points.size() << " starting points with " << num_of_threads << " threads" << std::endl;
+  _lbfgsb.reserve(num_of_threads); //Allocate, but do not assign
+  // init predefined constants
+  ukfVectorType lowerBound(13), upperBound(13);
+  // Lower bound
+  // First bi-exponential parameters
+  lowerBound[0] = lowerBound[1] = 1.0;
+  lowerBound[2] = lowerBound[3] = 0.1;
+
+  // Second bi-exponential
+  lowerBound[4] = lowerBound[5] = 1.0;
+  lowerBound[6] = lowerBound[7] = 0.1;
+
+  // Third bi-exponential
+  lowerBound[8] = lowerBound[9] = 1.0;
+  lowerBound[10] = lowerBound[11] = 0.1;
+
+  // w1 & w2 & w3 in [0,1]
+  //lowerBound[12] = lowerBound[13] = lowerBound[14] = 0.0;
+  // free water between 0 and 1
+  //lowerBound[15] = 0.0;
+  lowerBound[12] = 0.0;
+
+  // Upper bound
+  // First bi-exponential
+  upperBound[0] = upperBound[1] = upperBound[2] = upperBound[3] = 3000.0;
+
+  // Second bi-exponential
+  upperBound[4] = upperBound[5] = upperBound[6] = upperBound[7] = 3000.0;
+
+  // Third bi-exponential
+  upperBound[8] = upperBound[9] = upperBound[10] = upperBound[11] = 3000.0;
+
+  //upperBound[12] = upperBound[13] = upperBound[14] = 1.0;
+  //upperBound[15] = 1.0;
+  upperBound[12] = 1.0;
+
+  for (int i = 0; i < num_of_threads; i++)
+  {
+    _lbfgsb.push_back(new LFBGSB(lowerBound, upperBound, _model));
+  }
+
+  std::cout << "Processing " << starting_points.size() << " starting points with " << _lbfgsb.size() << " threads" << std::endl;
   {
     WorkDistribution work_distribution = GenerateWorkDistribution(num_of_threads, static_cast<int>(starting_points.size()));
 
@@ -844,8 +886,6 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
   int signal_dim = _signal_data->GetSignalDimension();
   ukfVectorType signal(signal_dim * 2);
 
-  ukfPrecisionType Viso;
-
   if (_noddi)
   {
     ukfPrecisionType minnmse, nmse;
@@ -880,7 +920,7 @@ void Tractography::ProcessStartingPointsBiExp(const int thread_id,
           if (nmse < minnmse)
           {
             minnmse = nmse;
-            Viso = Visoperm[c];
+            ukfPrecisionType Viso = Visoperm[c];
             tmp_info_state[3] = Vic[b];        // Vic
             tmp_info_state[4] = kappas[a];     // Kappa
             tmp_info_inv_state[3] = Vic[b];    // Vic
@@ -1591,83 +1631,46 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
 
   state_temp(12) = state(24);
 
-  // init predefined constants
-  ukfVectorType lowerBound(13), upperBound(13);
-  // Lower bound
-  // First bi-exponential parameters
-  lowerBound[0] = lowerBound[1] = 1.0;
-  lowerBound[2] = lowerBound[3] = 0.1;
-
-  // Second bi-exponential
-  lowerBound[4] = lowerBound[5] = 1.0;
-  lowerBound[6] = lowerBound[7] = 0.1;
-
-  // Third bi-exponential
-  lowerBound[8] = lowerBound[9] = 1.0;
-  lowerBound[10] = lowerBound[11] = 0.1;
-
-  // w1 & w2 & w3 in [0,1]
-  //lowerBound[12] = lowerBound[13] = lowerBound[14] = 0.0;
-  // free water between 0 and 1
-  //lowerBound[15] = 0.0;
-  lowerBound[12] = 0.0;
-
-  // Upper bound
-  // First bi-exponential
-  upperBound[0] = upperBound[1] = upperBound[2] = upperBound[3] = 3000.0;
-
-  // Second bi-exponential
-  upperBound[4] = upperBound[5] = upperBound[6] = upperBound[7] = 3000.0;
-
-  // Third bi-exponential
-  upperBound[8] = upperBound[9] = upperBound[10] = upperBound[11] = 3000.0;
-
-  //upperBound[12] = upperBound[13] = upperBound[14] = 1.0;
-  //upperBound[15] = 1.0;
-  upperBound[12] = 1.0;
-
   // init solver with bounds
-  std::auto_ptr<LFBGSB> MySolver(new LFBGSB(lowerBound, upperBound, _model));
-
-  (*MySolver)._signal = signal;
-  (*MySolver)._fixed_params = fixed_params;
+  
+  _lbfgsb[thread_id]->_signal = signal;
+  _lbfgsb[thread_id]->_fixed_params = fixed_params;
   // Run solver
-  (*MySolver).Solve(state_temp);
-  cout << "" << (*MySolver).XOpt.transpose() << endl << endl;
+  _lbfgsb[thread_id]->Solve(state_temp);
+  
+  //cout << "" << (*MySolver).XOpt.transpose() << endl << endl;
   //exit(0);
 
   //MySolver.XOpt;
 
-  /*
   // Fill back the state tensor to return it the callee
-  state(0) = fixed(0);
-  state(1) = fixed(1);
-  state(2) = fixed(2);
-  state(7) = fixed(3);
-  state(8) = fixed(4);
-  state(9) = fixed(5);
-  state(14) = fixed(6);
-  state(15) = fixed(7);
-  state(16) = fixed(8);
+  state(0) = fixed_params(0);
+  state(1) = fixed_params(1);
+  state(2) = fixed_params(2);
+  state(7) = fixed_params(3);
+  state(8) = fixed_params(4);
+  state(9) = fixed_params(5);
+  state(14) = fixed_params(6);
+  state(15) = fixed_params(7);
+  state(16) = fixed_params(8);
 
-  state(21) = fixed(9);
-  state(22) = fixed(10);
-  state(23) = fixed(11);
+  state(21) = fixed_params(9);
+  state(22) = fixed_params(10);
+  state(23) = fixed_params(11);
 
-  state(3) = state_temp(0);
-  state(4) = state_temp(1);
-  state(5) = state_temp(2);
-  state(6) = state_temp(3);
-  state(10) = state_temp(4);
-  state(11) = state_temp(5);
-  state(12) = state_temp(6);
-  state(13) = state_temp(7);
-  state(17) = state_temp(8);
-  state(18) = state_temp(9);
-  state(19) = state_temp(10);
-  state(20) = state_temp(11);
-  state(24) = state_temp(12);
-*/
+  state(3) = _lbfgsb[thread_id]->XOpt(0);
+  state(4) = _lbfgsb[thread_id]->XOpt(1);
+  state(5) = _lbfgsb[thread_id]->XOpt(2);
+  state(6) = _lbfgsb[thread_id]->XOpt(3);
+  state(10) = _lbfgsb[thread_id]->XOpt(4);
+  state(11) = _lbfgsb[thread_id]->XOpt(5);
+  state(12) = _lbfgsb[thread_id]->XOpt(6);
+  state(13) = _lbfgsb[thread_id]->XOpt(7);
+  state(17) = _lbfgsb[thread_id]->XOpt(8);
+  state(18) = _lbfgsb[thread_id]->XOpt(9);
+  state(19) = _lbfgsb[thread_id]->XOpt(10);
+  state(20) = _lbfgsb[thread_id]->XOpt(11);
+  state(24) = _lbfgsb[thread_id]->XOpt(12);
 
   // Second phase of optimization (optional)
   // In this phase only w1, w2, w3 are optimizing
