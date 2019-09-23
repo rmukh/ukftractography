@@ -136,14 +136,20 @@ void itk::DiffusionPropagatorCostFunction::GetDerivative(const ParametersType &p
 }
 
 LBFGSBSolver::LBFGSBSolver(FilterModel *filter_model)
-    : m_FilterModel(filter_model), state_temp{}, fixed{}
+    : m_FilterModel(filter_model)
 {
-    state_temp.resize(13);
-    fixed.resize(12);
 }
 
 void LBFGSBSolver::Optimize(State &state_inp, const ukfVectorType &signal_inp)
 {
+    /* Real optimization variables holder */
+    ukfVectorType state_temp;
+
+    /* Non-optimizing part of state */
+    ukfVectorType fixed;
+
+    state_temp.resize(13);
+    fixed.resize(12);
     ukfVectorType signal(signal_inp.size());
     for (unsigned int i = 0; i < signal_inp.size(); ++i)
     {
@@ -250,7 +256,7 @@ void LBFGSBSolver::Optimize(State &state_inp, const ukfVectorType &signal_inp)
     optimizer->SetMaximumNumberOfEvaluations(500);
     optimizer->SetMaximumNumberOfCorrections(10);     // The number of corrections to approximate the inverse hessian matrix
     optimizer->SetCostFunctionConvergenceFactor(1e1); // Precision of the solution: 1e+12 for low accuracy; 1e+7 for moderate accuracy and 1e+1 for extremely high accuracy.
-    optimizer->SetTrace(false);                        // Print debug info
+    optimizer->SetTrace(false);                       // Print debug info
 
     optimizer->SetBoundSelection(boundSelect);
     optimizer->SetUpperBound(upperBound);

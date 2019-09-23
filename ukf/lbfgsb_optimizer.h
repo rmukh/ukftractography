@@ -138,12 +138,6 @@ public:
 private:
     /** Pointer to the filter model */
     const FilterModel *const m_FilterModel;
-
-    /* Real optimization variables holder */
-    ukfVectorType state_temp;
-
-    /* Non-optimizing part of state */
-    ukfVectorType fixed;
 };
 
 #endif // LBFGSB_OPTIMIZER_H_
