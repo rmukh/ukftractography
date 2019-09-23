@@ -705,8 +705,6 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
     }
   }
 
-  std::vector<SeedPointInfo> seed_infos2;
-  seed_infos2.reserve(6 * starting_points.size());
   const int num_of_threads = std::min(_num_threads, static_cast<int>(starting_points.size()));
   assert(num_of_threads > 0);
 
@@ -734,7 +732,7 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
     str.tractography_ = this;
     str.work_distribution = &work_distribution;
 
-    str.seed_infos_ = &seed_infos2;
+    str.seed_infos_ = &seed_infos;
     str.starting_points_ = &starting_points;
     str.signal_values_ = &signal_values;
     str.starting_params_ = &starting_params;
@@ -765,7 +763,7 @@ void Tractography::Init(std::vector<SeedPointInfo> &seed_infos)
     threader->MultipleMethodExecute();
 #endif
   }
-  seed_infos = seed_infos2;
+
   cout << "Final seeds vector size " << seed_infos.size() << std::endl;
 }
 
