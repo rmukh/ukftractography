@@ -1594,14 +1594,52 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
 
   state_temp(12) = state(24);
 
+  // Lower bound
+  ukfVectorType lowerBound(13);
+  // First bi-exponential parameters
+  lowerBound[0] = lowerBound[1] = 1.0;
+  lowerBound[2] = lowerBound[3] = 0.1;
+
+  // Second bi-exponential
+  lowerBound[4] = lowerBound[5] = 1.0;
+  lowerBound[6] = lowerBound[7] = 0.1;
+
+  // Third bi-exponential
+  lowerBound[8] = lowerBound[9] = 1.0;
+  lowerBound[10] = lowerBound[11] = 0.1;
+
+  // w1 & w2 & w3 in [0,1]
+  //lowerBound[12] = lowerBound[13] = lowerBound[14] = 0.0;
+  // free water between 0 and 1
+  //lowerBound[15] = 0.0;
+  lowerBound[12] = 0.0;
+
+  // Upper bound
+  ukfVectorType upperBound(13);
+  // First bi-exponential
+  upperBound[0] = upperBound[1] = upperBound[2] = upperBound[3] = 3000.0;
+
+  // Second bi-exponential
+  upperBound[4] = upperBound[5] = upperBound[6] = upperBound[7] = 3000.0;
+
+  // Third bi-exponential
+  upperBound[8] = upperBound[9] = upperBound[10] = upperBound[11] = 3000.0;
+
+  //upperBound[12] = upperBound[13] = upperBound[14] = 1.0;
+  //upperBound[15] = 1.0;
+  upperBound[12] = 1.0;
+
   // init solver with bounds
-  
-  _lbfgsb[thread_id]->_signal = signal;
-  _lbfgsb[thread_id]->_fixed_params = fixed_params;
+  _lbfgsb[thread_id]->setSignal(signal);
+  _lbfgsb[thread_id]->setFixed(fixed_params);
+  _lbfgsb[thread_id]->setLowerBound(lowerBound);
+  _lbfgsb[thread_id]->setUpperBound(upperBound);
+  _lbfgsb[thread_id]->setPhase(1);
   // Run solver
   _lbfgsb[thread_id]->Solve(state_temp);
-  
-  //cout << "" << (*MySolver).XOpt.transpose() << endl << endl;
+
+  state_temp = _lbfgsb[thread_id]->XOpt;
+  //cout << "after " << state_temp.transpose() << endl << endl;
   //exit(0);
 
   //MySolver.XOpt;
@@ -1621,140 +1659,107 @@ void Tractography::NonLinearLeastSquareOptimization(const int thread_id, State &
   state(22) = fixed_params(10);
   state(23) = fixed_params(11);
 
-  state(3) = _lbfgsb[thread_id]->XOpt(0);
-  state(4) = _lbfgsb[thread_id]->XOpt(1);
-  state(5) = _lbfgsb[thread_id]->XOpt(2);
-  state(6) = _lbfgsb[thread_id]->XOpt(3);
-  state(10) = _lbfgsb[thread_id]->XOpt(4);
-  state(11) = _lbfgsb[thread_id]->XOpt(5);
-  state(12) = _lbfgsb[thread_id]->XOpt(6);
-  state(13) = _lbfgsb[thread_id]->XOpt(7);
-  state(17) = _lbfgsb[thread_id]->XOpt(8);
-  state(18) = _lbfgsb[thread_id]->XOpt(9);
-  state(19) = _lbfgsb[thread_id]->XOpt(10);
-  state(20) = _lbfgsb[thread_id]->XOpt(11);
-  state(24) = _lbfgsb[thread_id]->XOpt(12);
+  state(3) = state_temp(0);
+  state(4) = state_temp(1);
+  state(5) = state_temp(2);
+  state(6) = state_temp(3);
+  state(10) = state_temp(4);
+  state(11) = state_temp(5);
+  state(12) = state_temp(6);
+  state(13) = state_temp(7);
+  state(17) = state_temp(8);
+  state(18) = state_temp(9);
+  state(19) = state_temp(10);
+  state(20) = state_temp(11);
+  state(24) = state_temp(12);
 
   // Second phase of optimization (optional)
   // In this phase only w1, w2, w3 are optimizing
-  /*
-  CostType::Pointer cost2 = CostType::New();
-  OptimizerType::Pointer optimizer2 = OptimizerType::New();
 
   // Fill in array of parameters we are not intented to optimized
   // We still need to pass this parameters to optimizer because we need to compute
   // estimated signal during optimization and it requireds full state
-  fixed.resize(22);
-  fixed(0) = state(0);
-  fixed(1) = state(1);
-  fixed(2) = state(2);
-  fixed(3) = state(3);
-  fixed(4) = state(4);
-  fixed(5) = state(5);
-  fixed(6) = state(6);
-  fixed(7) = state(7);
-  fixed(8) = state(8);
-  fixed(9) = state(9);
-  fixed(10) = state(10);
-  fixed(11) = state(11);
-  fixed(12) = state(12);
-  fixed(13) = state(13);
-  fixed(14) = state(14);
-  fixed(15) = state(15);
-  fixed(16) = state(16);
-  fixed(17) = state(17);
-  fixed(18) = state(18);
-  fixed(19) = state(19);
-  fixed(20) = state(20);
-  fixed(21) = state(24);
-
-  // std::cout << "state before\n " << state << std::endl;
+  fixed_params.resize(22);
+  fixed_params(0) = state(0);
+  fixed_params(1) = state(1);
+  fixed_params(2) = state(2);
+  fixed_params(3) = state(3);
+  fixed_params(4) = state(4);
+  fixed_params(5) = state(5);
+  fixed_params(6) = state(6);
+  fixed_params(7) = state(7);
+  fixed_params(8) = state(8);
+  fixed_params(9) = state(9);
+  fixed_params(10) = state(10);
+  fixed_params(11) = state(11);
+  fixed_params(12) = state(12);
+  fixed_params(13) = state(13);
+  fixed_params(14) = state(14);
+  fixed_params(15) = state(15);
+  fixed_params(16) = state(16);
+  fixed_params(17) = state(17);
+  fixed_params(18) = state(18);
+  fixed_params(19) = state(19);
+  fixed_params(20) = state(20);
+  fixed_params(21) = state(24);
 
   state_temp.resize(3);
   state_temp(0) = state(21);
   state_temp(1) = state(22);
   state_temp(2) = state(23);
 
-  cost2->SetNumberOfParameters(state_temp.size());
-  cost2->SetNumberOfFixed(fixed.size());
-  cost2->SetNumberOfValues(signal.size());
-  cost2->SetSignalValues(signal);
-  cost2->SetModel(model);
-  cost2->SetFixed(fixed);
-  cost2->SetPhase(2);
+  //std::cout << "before\n " << state_temp.transpose() << std::endl;
 
-  optimizer2->SetCostFunction(cost2);
-
-  CostType::ParametersType p2(cost2->GetNumberOfParameters());
-
-  // Fill p
-  for (int it = 0; it < state_temp.size(); ++it)
-    p2[it] = state_temp[it];
-
-  optimizer2->SetInitialPosition(p2);
-  optimizer2->SetProjectedGradientTolerance(1e-12);
-  optimizer2->SetMaximumNumberOfIterations(500);
-  optimizer2->SetMaximumNumberOfEvaluations(500);
-  optimizer2->SetMaximumNumberOfCorrections(10);     // The number of corrections to approximate the inverse hessian matrix
-  optimizer2->SetCostFunctionConvergenceFactor(1e1); // Precision of the solution: 1e+12 for low accuracy; 1e+7 for moderate accuracy and 1e+1 for extremely high accuracy.
-  optimizer2->SetTrace(false);                       // Print debug info
-
-  // Set bounds
-  OptimizerType::BoundSelectionType boundSelect2(cost2->GetNumberOfParameters());
-  OptimizerType::BoundValueType upperBound2(cost2->GetNumberOfParameters());
-  OptimizerType::BoundValueType lowerBound2(cost2->GetNumberOfParameters());
-
-  boundSelect2.Fill(2); // BOTHBOUNDED = 2
-  lowerBound2.Fill(0.0);
-  upperBound2.Fill(1.0);
+  ukfVectorType lowerBound2(3);
+  ukfVectorType upperBound2(3);
 
   // Lower bound
   lowerBound2[0] = lowerBound2[1] = lowerBound2[2] = 0.0;
 
   // Upper bound
   upperBound2[0] = upperBound2[1] = upperBound2[2] = 1.0;
-  optimizer2->SetBoundSelection(boundSelect2);
-  optimizer2->SetUpperBound(upperBound2);
-  optimizer2->SetLowerBound(lowerBound2);
-  optimizer2->StartOptimization();
 
-  p2 = optimizer2->GetCurrentPosition();
+  // init solver with bounds
+  _lbfgsb[thread_id]->setSignal(signal);
+  _lbfgsb[thread_id]->setFixed(fixed_params);
+  _lbfgsb[thread_id]->setLowerBound(lowerBound2);
+  _lbfgsb[thread_id]->setUpperBound(upperBound2);
+  _lbfgsb[thread_id]->setPhase(2);
+  // Run solver
+  _lbfgsb[thread_id]->Solve(state_temp);
 
-  // Write back the state
-  for (int it = 0; it < state_temp.size(); ++it)
-    state_temp[it] = p2[it];
+  state_temp = _lbfgsb[thread_id]->XOpt;
+  //cout << "after " << state_temp.transpose() << endl;
 
   // Fill back the state tensor to return it the callee
-  state(0) = fixed(0);
-  state(1) = fixed(1);
-  state(2) = fixed(2);
-  state(3) = fixed(3);
-  state(4) = fixed(4);
-  state(5) = fixed(5);
-  state(6) = fixed(6);
-  state(7) = fixed(7);
-  state(8) = fixed(8);
-  state(9) = fixed(9);
-  state(10) = fixed(10);
-  state(11) = fixed(11);
-  state(12) = fixed(12);
-  state(13) = fixed(13);
-  state(14) = fixed(14);
-  state(15) = fixed(15);
-  state(16) = fixed(16);
-  state(17) = fixed(17);
-  state(18) = fixed(18);
-  state(19) = fixed(19);
-  state(20) = fixed(20);
-  state(24) = fixed(21);
+  state(0) = fixed_params(0);
+  state(1) = fixed_params(1);
+  state(2) = fixed_params(2);
+  state(3) = fixed_params(3);
+  state(4) = fixed_params(4);
+  state(5) = fixed_params(5);
+  state(6) = fixed_params(6);
+  state(7) = fixed_params(7);
+  state(8) = fixed_params(8);
+  state(9) = fixed_params(9);
+  state(10) = fixed_params(10);
+  state(11) = fixed_params(11);
+  state(12) = fixed_params(12);
+  state(13) = fixed_params(13);
+  state(14) = fixed_params(14);
+  state(15) = fixed_params(15);
+  state(16) = fixed_params(16);
+  state(17) = fixed_params(17);
+  state(18) = fixed_params(18);
+  state(19) = fixed_params(19);
+  state(20) = fixed_params(20);
+  state(24) = fixed_params(21);
 
   state(21) = state_temp(0);
   state(22) = state_temp(1);
   state(23) = state_temp(2);
-  */
 
-  // std::cout << "state after \n"
-  //           << state << std::endl;
+   //std::cout << "state after \n" << state << std::endl;
 }
 
 void Tractography::InverseStateDiffusionPropagator(stdVecState &reference, stdVecState &inverted)

@@ -2,11 +2,11 @@
 
 // 2T Bi-Exponential model with spherical ridgelets //
 // Functions for 3-tensor bi-exponential simple model.
-void Ridg_BiExp_FW::F(ukfMatrixType& X, ukfVectorType s, const ukfMatrixType& covMatrix) const
+void Ridg_BiExp_FW::F(ukfMatrixType &X, ukfVectorType s, const ukfMatrixType &covMatrix) const
 {
 	assert(_signal_dim > 0);
 	assert(X.rows() == static_cast<unsigned int>(_state_dim) &&
-		(X.cols() == static_cast<unsigned int>(2 * _state_dim + 1) ||
+		   (X.cols() == static_cast<unsigned int>(2 * _state_dim + 1) ||
 			X.cols() == 1));
 
 	UtilMath<ukfPrecisionType, ukfMatrixType, ukfVectorType> m;
@@ -300,7 +300,7 @@ void Ridg_BiExp_FW::F(ukfMatrixType& X, ukfVectorType s, const ukfMatrixType& co
 	} //for X.cols()
 }
 
-ukfPrecisionType Ridg_BiExp_FW::cosine_similarity(vec3_t& First, vec3_t& Second) const
+ukfPrecisionType Ridg_BiExp_FW::cosine_similarity(vec3_t &First, vec3_t &Second) const
 {
 	ukfPrecisionType dot = First.dot(Second);
 	ukfPrecisionType den_a = First.norm();
@@ -316,11 +316,12 @@ ukfPrecisionType Ridg_BiExp_FW::cosine_similarity(vec3_t& First, vec3_t& Second)
 	return dot / (den_a * den_b);
 }
 
-void Ridg_BiExp_FW::F(ukfMatrixType& X) const {
+void Ridg_BiExp_FW::F(ukfMatrixType &X) const
+{
 	// Identity version of state-transition function
 	assert(_signal_dim > 0);
 	assert(X.rows() == static_cast<unsigned int>(_state_dim) &&
-		(X.cols() == static_cast<unsigned int>(2 * _state_dim + 1) ||
+		   (X.cols() == static_cast<unsigned int>(2 * _state_dim + 1) ||
 			X.cols() == 1));
 	for (unsigned int i = 0; i < X.cols(); ++i)
 	{
@@ -398,20 +399,20 @@ void Ridg_BiExp_FW::F(ukfMatrixType& X) const {
 	}
 };
 
-void Ridg_BiExp_FW::H(const ukfMatrixType& X,
-	ukfMatrixType& Y) const
+void Ridg_BiExp_FW::H(const ukfMatrixType &X,
+					  ukfMatrixType &Y) const
 {
 	assert(_signal_dim > 0);
 	assert(X.rows() == static_cast<unsigned int>(_state_dim) &&
-		(X.cols() == static_cast<unsigned int>(2 * _state_dim + 1) ||
+		   (X.cols() == static_cast<unsigned int>(2 * _state_dim + 1) ||
 			X.cols() == 1));
 	assert(Y.rows() == static_cast<unsigned int>(_signal_dim) &&
-		(Y.cols() == static_cast<unsigned int>(2 * _state_dim + 1) ||
+		   (Y.cols() == static_cast<unsigned int>(2 * _state_dim + 1) ||
 			Y.cols() == 1));
 	assert(_signal_data);
 
-	const stdVec_t& gradients = _signal_data->gradients();
-	const ukfVectorType& b = _signal_data->GetBValues();
+	const stdVec_t &gradients = _signal_data->gradients();
+	const ukfVectorType &b = _signal_data->GetBValues();
 
 	for (unsigned int i = 0; i < X.cols(); ++i)
 	{
@@ -505,12 +506,12 @@ void Ridg_BiExp_FW::H(const ukfMatrixType& X,
 		lambdas32.diagonal()[2] = l34;
 
 		// Calculate diffusion matrix.
-		const mat33_t& D1 = diffusion(m1, lambdas11);
-		const mat33_t& D1t = diffusion(m1, lambdas12);
-		const mat33_t& D2 = diffusion(m2, lambdas21);
-		const mat33_t& D2t = diffusion(m2, lambdas22);
-		const mat33_t& D3 = diffusion(m3, lambdas31);
-		const mat33_t& D3t = diffusion(m3, lambdas32);
+		const mat33_t &D1 = diffusion(m1, lambdas11);
+		const mat33_t &D1t = diffusion(m1, lambdas12);
+		const mat33_t &D2 = diffusion(m2, lambdas21);
+		const mat33_t &D2t = diffusion(m2, lambdas22);
+		const mat33_t &D3 = diffusion(m3, lambdas31);
+		const mat33_t &D3t = diffusion(m3, lambdas32);
 
 		ukfPrecisionType _w_slow_diffusion = 1.0 - _w_fast_diffusion;
 		ukfPrecisionType _not_w = 1.0 - w;
@@ -518,18 +519,18 @@ void Ridg_BiExp_FW::H(const ukfMatrixType& X,
 		for (int j = 0; j < _signal_dim; ++j)
 		{
 			// u = gradient direction considered
-			const vec3_t& u = gradients[j];
+			const vec3_t &u = gradients[j];
 
 			Y(j, i) =
 				_not_w * (w1 * (_w_fast_diffusion * std::exp(-b[j] * u.dot(D1 * u)) + _w_slow_diffusion * std::exp(-b[j] * u.dot(D1t * u))) +
-					w2 * (_w_fast_diffusion * std::exp(-b[j] * u.dot(D2 * u)) + _w_slow_diffusion * std::exp(-b[j] * u.dot(D2t * u))) +
-					w3 * (_w_fast_diffusion * std::exp(-b[j] * u.dot(D3 * u)) + _w_slow_diffusion * std::exp(-b[j] * u.dot(D3t * u)))) +
+						  w2 * (_w_fast_diffusion * std::exp(-b[j] * u.dot(D2 * u)) + _w_slow_diffusion * std::exp(-b[j] * u.dot(D2t * u))) +
+						  w3 * (_w_fast_diffusion * std::exp(-b[j] * u.dot(D3 * u)) + _w_slow_diffusion * std::exp(-b[j] * u.dot(D3t * u)))) +
 				w * std::exp(-b[j] * u.dot(m_D_iso * u));
 		}
 	}
 }
 
-void Ridg_BiExp_FW::State2Tensor3T(const State& x, const vec3_t& old_m, vec3_t& m1, vec3_t& l1, vec3_t& m2, vec3_t& l2, vec3_t& m3, vec3_t& l3)
+void Ridg_BiExp_FW::State2Tensor3T(const State &x, const vec3_t &old_m, vec3_t &m1, vec3_t &l1, vec3_t &m2, vec3_t &l2, vec3_t &m3, vec3_t &l3)
 {
 	// Orientations;
 	initNormalized(m1, x[0], x[1], x[2]);
@@ -569,7 +570,7 @@ void Ridg_BiExp_FW::State2Tensor3T(const State& x, const vec3_t& old_m, vec3_t& 
 	}
 }
 
-void Ridg_BiExp_FW::State2Tensor3T(const State& x, const vec3_t& old_m, vec3_t& m1, vec3_t& m2, vec3_t& m3)
+void Ridg_BiExp_FW::State2Tensor3T(const State &x, const vec3_t &old_m, vec3_t &m1, vec3_t &m2, vec3_t &m3)
 {
 	// Orientations;
 	initNormalized(m1, x[0], x[1], x[2]);

@@ -26,6 +26,7 @@ eval $BINARY \
  --dwiFile $dwi_path \
  --maskFile $mask_path \
  --tracts $output_path \
+ --numThreads 8 \
  --seedsPerVoxel 1 \
  --diffusionPropagator \
  --minRTOP 20 \

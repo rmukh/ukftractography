@@ -70,45 +70,36 @@ public:
     const ukfPrecisionType EPS = 2.2204e-16;
     ukfVectorType lb, ub;
 
-    LFBGSB(FilterModel *model)
-        : tol(1e-12), maxIter(2000), m(10), wolfe1(1e-04), wolfe2(0.9), local_model(model)
+    LFBGSB(FilterModel *model) : tol(1e-12), maxIter(2000), m(10), wolfe1(1e-04), wolfe2(0.9), local_model(model) {}
+
+    /* helper functions */
+
+    void setPhase(unsigned val)
     {
-        lb.resize(13);
-        ub.resize(13);
-        // Lower bound
-        // First bi-exponential parameters
-        lb[0] = lb[1] = 1.0;
-        lb[2] = lb[3] = 0.1;
-
-        // Second bi-exponential
-        lb[4] = lb[5] = 1.0;
-        lb[6] = lb[7] = 0.1;
-
-        // Third bi-exponential
-        lb[8] = lb[9] = 1.0;
-        lb[10] = lb[11] = 0.1;
-
-        // w1 & w2 & w3 in [0,1]
-        //lb[12] = lb[13] = lb[14] = 0.0;
-        // free water between 0 and 1
-        //lb[15] = 0.0;
-        lb[12] = 0.0;
-
-        // Upper bound
-        // First bi-exponential
-        ub[0] = ub[1] = ub[2] = ub[3] = 3000.0;
-
-        // Second bi-exponential
-        ub[4] = ub[5] = ub[6] = ub[7] = 3000.0;
-
-        // Third bi-exponential
-        ub[8] = ub[9] = ub[10] = ub[11] = 3000.0;
-
-        //ub[12] = ub[13] = ub[14] = 1.0;
-        //ub[15] = 1.0;
-        ub[12] = 1.0;
+        phase = val;
     }
 
+    void setSignal(const ukfVectorType &val)
+    {
+        _signal = val;
+    }
+
+    void setFixed(const ukfVectorType &val)
+    {
+        _fixed_params = val;
+    }
+
+    void setLowerBound(const ukfVectorType &val)
+    {
+        lb = val;
+    }
+
+    void setUpperBound(const ukfVectorType &val)
+    {
+        ub = val;
+    }
+
+    /* Main 'computational' functions */
     std::vector<int> sort_indexes(const std::vector<std::pair<int, ukfPrecisionType>> &v)
     {
         std::vector<int> idx(v.size());
@@ -140,7 +131,7 @@ public:
 
         // Convert the parameter to the ukfMtarixType
         ukfVectorType localState(x.size() + _fixed_params.size());
-        if (1)
+        if (phase == 1)
         {
             localState(0) = _fixed_params(0);
             localState(1) = _fixed_params(1);
@@ -169,7 +160,7 @@ public:
             localState(20) = x(11);
             localState(24) = x(12);
         }
-        else if (0)
+        else if (phase == 2)
         {
             localState(0) = _fixed_params(0);
             localState(1) = _fixed_params(1);
@@ -200,7 +191,7 @@ public:
         }
         else
         {
-            std::cout << "You have not specified the phase!";
+            std::cout << "You have specified incorrect phase!";
             throw;
         }
 
@@ -236,65 +227,7 @@ public:
         // Set parameters
         p_h = x;
         p_hh = x;
-        /*
-        // Calculate derivative for each parameter (reference to the wikipedia page: Numerical Differentiation)
-        for (unsigned it = 0; it < x_size; ++it)
-        {
-            // // Optimal h is sqrt(epsilon machine) * x
-            // ukfPrecisionType h;
-            // if (x(it) == 0)
-            //     h = std::sqrt(EPS);
-            // else
-            //     h = std::sqrt(EPS) * x(it);
 
-            // //ukfPrecisionType h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
-
-            // // Volatile, otherwise compiler will optimize the value for dx
-            // volatile ukfPrecisionType xph = x(it) + h;
-
-            // // For taking into account the rounding error
-            // ukfPrecisionType dx = xph - x(it);
-
-            // // Compute the slope
-            // p_h(it) = xph;
-
-            // //p_hh[it] = parameters[it] - h;
-            // grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
-
-            // Estimating derivatives using Richardson's Extrapolation
-
-            //ukfPrecisionType h = std::sqrt(EPS) * std::max(std::abs(x(it)), 1.0);
-            ukfPrecisionType h = 0.001;
-            // Compute d/dx[func(*first)] using a three-point
-            // central difference rule of O(dx^6).
-
-            const ukfPrecisionType dx1 = h;
-            const ukfPrecisionType dx2 = dx1 * 2;
-            const ukfPrecisionType dx3 = dx1 * 3;
-
-            p_h(it) = x(it) + dx1;
-            p_hh(it) = x(it) - dx1;
-            const ukfPrecisionType m1 = (functionValue(p_h) - functionValue(p_hh)) / 2;
-
-            p_h(it) = x(it) + dx2;
-            p_hh(it) = x(it) - dx2;
-            const ukfPrecisionType m2 = (functionValue(p_h) - functionValue(p_hh)) / 4;
-
-            p_h(it) = x(it) + dx3;
-            p_hh(it) = x(it) - dx3;
-            const ukfPrecisionType m3 = (functionValue(p_h) - functionValue(p_hh)) / 6;
-
-            const ukfPrecisionType fifteen_m1 = 15 * m1;
-            const ukfPrecisionType six_m2 = 6 * m2;
-            const ukfPrecisionType ten_dx1 = 10 * dx1;
-
-            grad(it) = ((fifteen_m1 - six_m2) + m3) / ten_dx1;
-
-            // Set parameters back for next iteration
-            p_h(it) = x(it);
-            p_hh(it) = x(it);
-        }
-        */
         //original version
         for (unsigned it = 0; it < x_size; ++it)
         {
@@ -310,7 +243,6 @@ public:
             // Compute the slope
             p_h(it) = xph;
 
-            //p_hh[it] = parameters[it] - h;
             grad(it) = (functionValue(p_h) - functionValue(p_hh)) / dx;
 
             // Set parameters back for next iteration
@@ -334,93 +266,6 @@ public:
 
         return functionValue(x_inv);
     }
-
-    /* void functionGradientMSE(const ukfVectorType &x, ukfVectorType &grad)
-    {
-        // The size of the derivative is not set by default,
-        // so we have to do it manually
-        grad.resize(x.size());
-
-        // Convert the parameter to the ukfMtarixType
-        ukfVectorType localState(x.size() + _fixed_params.size());
-        if (1)
-        {
-            localState(0) = _fixed_params(0);
-            localState(1) = _fixed_params(1);
-            localState(2) = _fixed_params(2);
-            localState(7) = _fixed_params(3);
-            localState(8) = _fixed_params(4);
-            localState(9) = _fixed_params(5);
-            localState(14) = _fixed_params(6);
-            localState(15) = _fixed_params(7);
-            localState(16) = _fixed_params(8);
-            localState(21) = _fixed_params(9);
-            localState(22) = _fixed_params(10);
-            localState(23) = _fixed_params(11);
-
-            localState(3) = x(0);
-            localState(4) = x(1);
-            localState(5) = x(2);
-            localState(6) = x(3);
-            localState(10) = x(4);
-            localState(11) = x(5);
-            localState(12) = x(6);
-            localState(13) = x(7);
-            localState(17) = x(8);
-            localState(18) = x(9);
-            localState(19) = x(10);
-            localState(20) = x(11);
-            localState(24) = x(12);
-        }
-        else if (0)
-        {
-            localState(0) = _fixed_params(0);
-            localState(1) = _fixed_params(1);
-            localState(2) = _fixed_params(2);
-            localState(3) = _fixed_params(3);
-            localState(4) = _fixed_params(4);
-            localState(5) = _fixed_params(5);
-            localState(6) = _fixed_params(6);
-            localState(7) = _fixed_params(7);
-            localState(8) = _fixed_params(8);
-            localState(9) = _fixed_params(9);
-            localState(10) = _fixed_params(10);
-            localState(11) = _fixed_params(11);
-            localState(12) = _fixed_params(12);
-            localState(13) = _fixed_params(13);
-            localState(14) = _fixed_params(14);
-            localState(15) = _fixed_params(15);
-            localState(16) = _fixed_params(16);
-            localState(17) = _fixed_params(17);
-            localState(18) = _fixed_params(18);
-            localState(19) = _fixed_params(19);
-            localState(20) = _fixed_params(20);
-            localState(24) = _fixed_params(21);
-
-            localState(21) = x(0);
-            localState(22) = x(1);
-            localState(23) = x(2);
-        }
-        else
-        {
-            std::cout << "You have not specified the phase!";
-            throw;
-        }
-
-        // Estimate the signal
-        ukfVectorType estimatedSignal(_signal.size());
-        H(localState, estimatedSignal);
-
-        ukfVectorType grad_out;
-        functionGradient(x, grad_out);
-
-        ukfPrecisionType diff_sum = 0.0;
-
-        for (unsigned int i = 0; i < _signal.size() / 2; ++i)
-            diff_sum += _signal[i] - estimatedSignal(i);
-
-        grad = (ukfPrecisionType)(-1.0 / x.size()) * diff_sum * grad_out;
-    } */
 
     // Supremum norm
     ukfPrecisionType sup_norm(const ukfPrecisionType a, const ukfPrecisionType b, const ukfPrecisionType c)
@@ -948,6 +793,7 @@ private:
     ukfPrecisionType wolfe1;
     ukfPrecisionType wolfe2;
     const FilterModel *const local_model;
+    unsigned phase;
 };
 
 #endif /* LBFGSB_H_ */
