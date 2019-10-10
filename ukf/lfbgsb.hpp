@@ -99,15 +99,6 @@ public:
     }
 
     /* Main 'computational' functions */
-    std::vector<int> sort_indexes(const std::vector<std::pair<int, ukfPrecisionType>> &v)
-    {
-        std::vector<int> idx(v.size());
-        for (unsigned long i = 0; i != idx.size(); ++i)
-            idx[i] = v[i].first;
-        sort(idx.begin(), idx.end(), [&v](unsigned long i1, unsigned long i2) { return v[i1].second < v[i2].second; });
-        return idx;
-    }
-
     void computeError(const ukfMatrixType &signal_estimate, const ukfVectorType &signal, ukfPrecisionType &err)
     {
         ukfPrecisionType sum = 0.0;
