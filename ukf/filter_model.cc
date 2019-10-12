@@ -13,15 +13,7 @@ ukfPrecisionType SignalModel::CheckZero(const ukfPrecisionType &local_d) const
 {
   if (local_d < 0)
   {
-    if (local_d >= -1.0e-4) // for small errors just round it to 0
-    {
-      return ukfZero;
-    }
-    else // for errors too big exit with exception
-    {
-      std::cout << "Error, a variable became negative. Most likely something went wrong in the QP\n";
-      throw;
-    }
+    return ukfZero;
   }
   return local_d;
 }
