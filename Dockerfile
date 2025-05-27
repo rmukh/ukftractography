@@ -24,7 +24,7 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v${CMAKE}/cmake-${CM
 # build ukftractography
 RUN git clone https://github.com/pnlbwh/ukftractography.git && \
     cd ukftractography && mkdir build && cd build && \
-    /home/pnlbwh/cmake-3.31.0/build/bin/cmake .. && make -j4
+    /home/pnlbwh/cmake-${CMAKE}/build/bin/cmake .. && make -j4
 
 ENTRYPOINT ["/home/pnlbwh/ukftractography/build/UKFTractography-build/UKFTractography/bin/UKFTractography"]
 
