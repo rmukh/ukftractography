@@ -61,6 +61,7 @@ set(${PRIMARY_PROJECT_NAME}_DEPENDENCIES
   Eigen
   VTK
   teem
+  pnlNipype
   )
 
 #-----------------------------------------------------------------------------
