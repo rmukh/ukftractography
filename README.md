@@ -118,7 +118,18 @@ It should give you an idea of what a function call could look like.
 Files `dataset_Mask.nrrd` and `seeds_full_cc.nrrd` in [Input](UKFTractography/Data/Input/) folder are mask and seed files of subject 100307
 in hcp dataset, download the subject's preprocessed diffusion MRI data from https://db.humanconnectome.org/.
 
-### 2. As Slicer 5 module
+
+### 2. NIFTI support
+
+`UKFTractography` CLI historically supports only NRRD format. In May 2025, we integrated [pnlNipype](https://github.com/pnlbwh/pnlNipype)
+into it. Now you can use [ukf.py](https://github.com/pnlbwh/pnlNipype/blob/6543c163104b7ff0c686753c8721422138a70728/scripts/ukf.py)
+on NIFTI files without any additional installation steps. It uses `UKFTractography` under the hood but converts
+NIFTI to NRRD format on the fly. It can be found in:
+
+    <build-dir>/pnlNipype/scripts/ukf.py --help
+
+
+### 3. As Slicer 5 module
 
 Navigate to the Slicer Extension Manager and download `UKF Tractography` to
 install it as a Slicer 5 module.  There will be 3 modules under
