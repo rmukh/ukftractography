@@ -128,6 +128,9 @@ NIFTI to NRRD format on the fly. It can be found in:
 
     <build-dir>/pnlNipype/scripts/ukf.py --help
 
+Make sure to include `UKFTractography` in `PATH` first:
+
+    export PATH=<build-dir>/UKFTractography-build/UKFTractography/bin/:$PATH
 
 ### 3. As Slicer 5 module
 
